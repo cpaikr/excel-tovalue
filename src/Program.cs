@@ -1,27 +1,35 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Spreadsheet;
-using WinFormsControl = System.Windows.Forms.Control;
+// <copyright file="Program.cs" company="PlaceholderCompany">
+// Copyright (c) PlaceholderCompany. All rights reserved.
+// </copyright>
 
 namespace ExcelFormulaRemover
 {
+    using System;
+    using System.IO;
+    using System.Linq;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using System.Windows.Forms;
+    using DocumentFormat.OpenXml.Packaging;
+    using DocumentFormat.OpenXml.Spreadsheet;
+    using WinFormsControl = System.Windows.Forms.Control;
+
     public partial class MainForm : Form
     {
         private TextBox outputDirectoryTextBox = null!;
         private Button browseButton = null!;
         private ListBox fileListBox = null!;
         private Button processButton = null!;
+        private Button stopButton = null!;
         private ProgressBar progressBar = null!;
         private Label statusLabel = null!;
         private Panel dropPanel = null!;
+        private CancellationTokenSource? cancellationTokenSource;
+        private bool isProcessing = false;
 
         public MainForm()
         {
-            InitializeComponent();
+            this.InitializeComponent();
         }
 
         private void InitializeComponent()
@@ -32,13 +40,13 @@ namespace ExcelFormulaRemover
             this.AllowDrop = true;
 
             // Drop Panel
-            dropPanel = new Panel
+            this.dropPanel = new Panel
             {
                 Location = new System.Drawing.Point(20, 20),
                 Size = new System.Drawing.Size(540, 120),
                 BorderStyle = BorderStyle.FixedSingle,
                 AllowDrop = true,
-                BackColor = System.Drawing.Color.LightBlue
+                BackColor = System.Drawing.Color.LightBlue,
             };
 
             var dropLabel = new Label
@@ -47,63 +55,63 @@ namespace ExcelFormulaRemover
                 Location = new System.Drawing.Point(150, 40),
                 Size = new System.Drawing.Size(240, 40),
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
-                Font = new System.Drawing.Font("Arial", 12, System.Drawing.FontStyle.Bold)
+                Font = new System.Drawing.Font("Arial", 12, System.Drawing.FontStyle.Bold),
             };
 
-            dropPanel.Controls.Add(dropLabel);
-            dropPanel.DragEnter += DropPanel_DragEnter;
-            dropPanel.DragDrop += DropPanel_DragDrop;
+            this.dropPanel.Controls.Add(dropLabel);
+            this.dropPanel.DragEnter += this.DropPanel_DragEnter;
+            this.dropPanel.DragDrop += this.DropPanel_DragDrop;
 
             // Output Directory Selection
             var outputLabel = new Label
             {
                 Text = "출력 폴더:",
                 Location = new System.Drawing.Point(20, 160),
-                Size = new System.Drawing.Size(100, 20)
+                Size = new System.Drawing.Size(100, 20),
             };
 
-            outputDirectoryTextBox = new TextBox
+            this.outputDirectoryTextBox = new TextBox
             {
                 Location = new System.Drawing.Point(120, 158),
                 Size = new System.Drawing.Size(350, 20),
-                ReadOnly = true
+                ReadOnly = true,
             };
 
-            browseButton = new Button
+            this.browseButton = new Button
             {
                 Text = "찾아보기...",
                 Location = new System.Drawing.Point(480, 156),
-                Size = new System.Drawing.Size(80, 25)
+                Size = new System.Drawing.Size(80, 25),
             };
-            browseButton.Click += BrowseButton_Click;
+            this.browseButton.Click += this.BrowseButton_Click;
 
             // File List
             var filesLabel = new Label
             {
                 Text = "처리할 파일:",
                 Location = new System.Drawing.Point(20, 200),
-                Size = new System.Drawing.Size(100, 20)
+                Size = new System.Drawing.Size(100, 20),
             };
 
-            fileListBox = new ListBox
+            this.fileListBox = new ListBox
             {
                 Location = new System.Drawing.Point(20, 220),
                 Size = new System.Drawing.Size(440, 120),
-                AllowDrop = true
+                AllowDrop = true,
             };
-            fileListBox.DragEnter += DropPanel_DragEnter;
-            fileListBox.DragDrop += DropPanel_DragDrop;
+            this.fileListBox.DragEnter += this.DropPanel_DragEnter;
+            this.fileListBox.DragDrop += this.DropPanel_DragDrop;
 
             var clearButton = new Button
             {
                 Text = "지우기",
                 Location = new System.Drawing.Point(480, 220),
-                Size = new System.Drawing.Size(80, 25)
+                Size = new System.Drawing.Size(80, 25),
             };
-            clearButton.Click += (s, e) => fileListBox.Items.Clear();
+            clearButton.Click += (s, e) => this.fileListBox.Items.Clear();
 
             // Process Button
-            processButton = new Button
+            this.processButton = new Button
             {
                 Text = "수식 제거",
                 Location = new System.Drawing.Point(20, 360),
@@ -111,72 +119,89 @@ namespace ExcelFormulaRemover
                 Font = new System.Drawing.Font("Arial", 10, System.Drawing.FontStyle.Bold),
                 BackColor = System.Drawing.Color.Green,
                 ForeColor = System.Drawing.Color.White,
-                Enabled = false
+                Enabled = false,
             };
-            processButton.Click += ProcessButton_Click;
+            this.processButton.Click += this.ProcessButton_Click;
 
             // Progress Bar
-            progressBar = new ProgressBar
+            this.progressBar = new ProgressBar
             {
                 Location = new System.Drawing.Point(160, 365),
-                Size = new System.Drawing.Size(300, 20),
-                Visible = false
+                Size = new System.Drawing.Size(280, 20),
+                Visible = false,
             };
 
+            // Stop Button
+            this.stopButton = new Button
+            {
+                Text = "중지",
+                Location = new System.Drawing.Point(450, 365),
+                Size = new System.Drawing.Size(90, 20),
+                BackColor = System.Drawing.Color.Red,
+                ForeColor = System.Drawing.Color.White,
+                Font = new System.Drawing.Font("Arial", 9, System.Drawing.FontStyle.Bold),
+                Visible = false,
+            };
+            this.stopButton.Click += this.StopButton_Click;
+
             // Status Label
-            statusLabel = new Label
+            this.statusLabel = new Label
             {
                 Text = "준비 완료 - 파일을 드롭하고 출력 폴더를 선택하세요",
                 Location = new System.Drawing.Point(20, 410),
                 Size = new System.Drawing.Size(540, 20),
-                ForeColor = System.Drawing.Color.Blue
+                ForeColor = System.Drawing.Color.Blue,
             };
 
             // Add all controls
-            this.Controls.AddRange(new WinFormsControl[] {
-                dropPanel, outputLabel, outputDirectoryTextBox, browseButton,
-                filesLabel, fileListBox, clearButton, processButton,
-                progressBar, statusLabel
+            this.Controls.AddRange(new WinFormsControl[]
+            {
+                this.dropPanel, outputLabel, this.outputDirectoryTextBox, this.browseButton,
+                filesLabel, this.fileListBox, clearButton, this.processButton,
+                this.progressBar, this.stopButton, this.statusLabel,
             });
 
-            UpdateUI();
+            this.UpdateUI();
         }
 
         private void DropPanel_DragEnter(object? sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
             {
-                var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
-                if (files.Any(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || 
+                var files = (string[] ?)e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Any(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
                                    f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)))
                 {
                     e.Effect = DragDropEffects.Copy;
-                    dropPanel.BackColor = System.Drawing.Color.LightGreen;
+                    this.dropPanel.BackColor = System.Drawing.Color.LightGreen;
                 }
             }
         }
 
         private void DropPanel_DragDrop(object? sender, DragEventArgs e)
         {
-            dropPanel.BackColor = System.Drawing.Color.LightBlue;
-            
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            this.dropPanel.BackColor = System.Drawing.Color.LightBlue;
+
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
             {
-                var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
-                var excelFiles = files.Where(f => 
-                    f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || 
-                    f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase));
-
-                foreach (var file in excelFiles)
+                var files = (string[] ?)e.Data.GetData(DataFormats.FileDrop);
+                if (files != null)
                 {
-                    if (!fileListBox.Items.Contains(file))
-                    {
-                        fileListBox.Items.Add(file);
-                    }
-                }
+                    var excelFiles = files.Where(f =>
+                        f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+                        f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase));
 
-                statusLabel.Text = $"{excelFiles.Count()}개 엑셀 파일 추가됨";
-                UpdateUI();
+                    foreach (var file in excelFiles)
+                    {
+                        if (!this.fileListBox.Items.Contains(file))
+                        {
+                            this.fileListBox.Items.Add(file);
+                        }
+                    }
+
+                    this.statusLabel.Text = $"{excelFiles.Count()}개 엑셀 파일 추가됨";
+                    this.UpdateUI();
+                }
             }
         }
 
@@ -185,109 +210,188 @@ namespace ExcelFormulaRemover
             using (var dialog = new FolderBrowserDialog())
             {
                 dialog.Description = "처리된 파일의 출력 폴더를 선택하세요";
-                
+
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
-                    outputDirectoryTextBox.Text = dialog.SelectedPath;
-                    UpdateUI();
+                    this.outputDirectoryTextBox.Text = dialog.SelectedPath;
+                    this.UpdateUI();
                 }
             }
         }
 
         private void UpdateUI()
         {
-            processButton.Enabled = fileListBox.Items.Count > 0 && 
-                                   !string.IsNullOrEmpty(outputDirectoryTextBox.Text);
+            this.processButton.Enabled = true;
         }
 
         private async void ProcessButton_Click(object? sender, EventArgs e)
         {
+            // Validate prerequisites before processing
+            if (string.IsNullOrEmpty(this.outputDirectoryTextBox.Text))
+            {
+                MessageBox.Show(
+                    "출력 폴더를 선택해주세요!\n\n처리된 파일이 저장될 폴더를 지정해야 합니다.",
+                    "출력 폴더 미선택", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                this.statusLabel.Text = "오류: 출력 폴더를 선택해주세요";
+                this.statusLabel.ForeColor = System.Drawing.Color.Red;
+                return;
+            }
+
+            if (this.fileListBox.Items.Count == 0)
+            {
+                MessageBox.Show(
+                    "처리할 엑셀 파일을 추가해주세요!\n\n파일을 드래그하여 추가하거나 선택해주세요.",
+                    "처리할 파일 없음", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                this.statusLabel.Text = "오류: 처리할 파일을 추가해주세요";
+                this.statusLabel.ForeColor = System.Drawing.Color.Red;
+                return;
+            }
+
+            // Reset status label color to normal
+            this.statusLabel.ForeColor = System.Drawing.Color.Blue;
+
+            // Declare variables outside try block for scope access
+            var outputDir = this.outputDirectoryTextBox.Text;
+            var files = this.fileListBox.Items.Cast<string>().ToList();
+            var completedFiles = 0;
+            var currentOutputFile = string.Empty;
+
             try
             {
-                processButton.Enabled = false;
-                progressBar.Visible = true;
-                progressBar.Maximum = fileListBox.Items.Count;
-                progressBar.Value = 0;
+                // Initialize cancellation token and UI state
+                this.cancellationTokenSource = new CancellationTokenSource();
+                this.isProcessing = true;
 
-                var outputDir = outputDirectoryTextBox.Text;
-                var files = fileListBox.Items.Cast<string>().ToList();
+                this.processButton.Enabled = false;
+                this.stopButton.Visible = true;
+                this.progressBar.Visible = true;
+                this.progressBar.Style = ProgressBarStyle.Marquee;
+                this.progressBar.MarqueeAnimationSpeed = 30;
 
-                statusLabel.Text = "파일 처리 중...";
+                this.statusLabel.Text = "파일 처리 중...";
 
-                await Task.Run(() =>
+                await Task.Run(
+                    () =>
                 {
                     for (int i = 0; i < files.Count; i++)
                     {
+                        // Check for cancellation before processing each file
+                        this.cancellationTokenSource.Token.ThrowIfCancellationRequested();
+
                         var inputFile = files[i];
                         var fileName = Path.GetFileNameWithoutExtension(inputFile);
                         var extension = Path.GetExtension(inputFile);
-                        var outputFile = Path.Combine(outputDir, $"{fileName}_수식제거{extension}");
+                        currentOutputFile = Path.Combine(outputDir, $"{fileName}_수식제거{extension}");
 
                         try
                         {
                             this.Invoke(new Action(() =>
                             {
-                                statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)}";
+                                this.statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)}";
                             }));
 
-                            ConvertFormulasToValues(inputFile, outputFile);
+                            this.ConvertFormulasToValues(inputFile, currentOutputFile, this.cancellationTokenSource.Token);
 
-                            this.Invoke(new Action(() =>
+                            completedFiles++;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Clean up partial file if it exists
+                            try
                             {
-                                progressBar.Value = i + 1;
-                            }));
+                                if (File.Exists(currentOutputFile))
+                                {
+                                    File.Delete(currentOutputFile);
+                                }
+                            }
+                            catch
+                            { /* Ignore cleanup errors */
+                            }
+
+                            throw; // Re-throw to be caught by outer handler
                         }
                         catch (Exception ex)
                         {
                             this.Invoke(new Action(() =>
                             {
-                                MessageBox.Show($"{Path.GetFileName(inputFile)} 처리 중 오류:\n{ex.Message}",
-                                              "처리 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                MessageBox.Show(
+                                    $"{Path.GetFileName(inputFile)} 처리 중 오류:\n{ex.Message}",
+                                    "처리 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }));
                         }
                     }
-                });
+                }, this.cancellationTokenSource.Token);
 
-                statusLabel.Text = $"완료! {files.Count}개 파일 처리됨.";
-                MessageBox.Show($"{files.Count}개 파일 처리 완료!\n출력 폴더: {outputDir}\n\n" +
+                this.statusLabel.Text = $"완료! {completedFiles}개 파일 처리됨.";
+                MessageBox.Show(
+                    $"{completedFiles}개 파일 처리 완료!\n출력 폴더: {outputDir}\n\n" +
                               "★★★ 중요 ★★★\n" +
                               "반드시 산출 파일을 열어서 정상적으로 변환되었는지 확인하세요!\n" +
                               "수식이 값으로 올바르게 대체되었는지 검증이 필요합니다.",
-                              "처리 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "처리 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                this.statusLabel.Text = $"처리 중지됨. {completedFiles}개 파일 완료.";
+                MessageBox.Show(
+                    $"사용자에 의해 처리가 중지되었습니다.\n완료된 파일: {completedFiles}개\n출력 폴더: {outputDir}",
+                    "처리 중지", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"오류가 발생했습니다: {ex.Message}", "오류", 
+                MessageBox.Show($"오류가 발생했습니다: {ex.Message}", "오류",
                               MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                processButton.Enabled = true;
-                progressBar.Visible = false;
-                UpdateUI();
+                // Reset UI state
+                this.isProcessing = false;
+                this.processButton.Enabled = true;
+                this.stopButton.Visible = false;
+                this.progressBar.Visible = false;
+                this.progressBar.Style = ProgressBarStyle.Continuous;
+
+                // Dispose cancellation token source
+                this.cancellationTokenSource?.Dispose();
+                this.cancellationTokenSource = null;
+
+                this.UpdateUI();
             }
         }
 
-        private void ConvertFormulasToValues(string inputFile, string outputFile)
+        private void StopButton_Click(object? sender, EventArgs e)
+        {
+            if (this.isProcessing && this.cancellationTokenSource != null)
+            {
+                this.statusLabel.Text = "중지 요청됨 - 처리를 안전하게 중단하는 중...";
+                this.stopButton.Enabled = false;
+                this.cancellationTokenSource.Cancel();
+            }
+        }
+
+        private void ConvertFormulasToValues(string inputFile, string outputFile, CancellationToken cancellationToken)
         {
             // Copy file first to preserve original
             File.Copy(inputFile, outputFile, true);
 
             using var document = SpreadsheetDocument.Open(outputFile, true);
-            
+
             int totalFormulas = 0;
             int processedFormulas = 0;
-            
+
             // First, count total formulas across all worksheets
             foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
             {
                 var worksheet = worksheetPart.Worksheet;
                 totalFormulas += worksheet.Descendants<Cell>().Count(c => c.CellFormula != null);
             }
-            
+
             // Now process the formulas
             foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
             {
+                // Check for cancellation before processing each worksheet
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var worksheet = worksheetPart.Worksheet;
                 var cells = worksheet.Descendants<Cell>().Where(c => c.CellFormula != null).ToList();
 
@@ -296,19 +400,26 @@ namespace ExcelFormulaRemover
                     try
                     {
                         processedFormulas++;
-                        
-                        // Update status with formula progress every 1000 formulas for better performance
-                        if (processedFormulas % 1000 == 0 || processedFormulas == totalFormulas)
+
+                        // Check for cancellation every 100 formulas for faster response
+                        if (processedFormulas % 100 == 0 || processedFormulas == totalFormulas)
+                        {
+                            // Check for cancellation
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+
+                        // Update status every 100K formulas for performance
+                        if (processedFormulas % 100000 == 0 || processedFormulas == totalFormulas)
                         {
                             this.Invoke(new Action(() =>
                             {
-                                // Display counts in millions with two decimal places
+                                // Display counts in millions with one decimal place
                                 double processedMillions = processedFormulas / 1000000.0;
                                 double totalMillions = totalFormulas / 1000000.0;
-                                statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)} - 수식 {processedMillions:F2}백만개 / {totalMillions:F2}백만개";
+                                this.statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)} - 수식 {processedMillions:F1}백만개 / {totalMillions:F1}백만개";
                             }));
                         }
-                        
+
                         // Keep the calculated value, remove the formula
                         var calculatedValue = cell.CellValue?.Text;
                         if (calculatedValue != null)
@@ -343,10 +454,10 @@ namespace ExcelFormulaRemover
         }
     }
 
-    class Program
+    internal class Program
     {
         [STAThread]
-        static void Main()
+        private static void Main()
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
