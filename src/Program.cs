@@ -249,7 +249,10 @@ namespace ExcelFormulaRemover
                 });
 
                 statusLabel.Text = $"완료! {files.Count}개 파일 처리됨.";
-                MessageBox.Show($"{files.Count}개 파일 처리 완료!\n출력 폴더: {outputDir}",
+                MessageBox.Show($"{files.Count}개 파일 처리 완료!\n출력 폴더: {outputDir}\n\n" +
+                              "★★★ 중요 ★★★\n" +
+                              "반드시 산출 파일을 열어서 정상적으로 변환되었는지 확인하세요!\n" +
+                              "수식이 값으로 올바르게 대체되었는지 검증이 필요합니다.",
                               "처리 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
