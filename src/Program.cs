@@ -26,7 +26,7 @@ namespace ExcelFormulaRemover
 
         private void InitializeComponent()
         {
-            this.Text = "Excel Formula Remover";
+            this.Text = "엑셀 수식 제거기";
             this.Size = new System.Drawing.Size(600, 500);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.AllowDrop = true;
@@ -43,7 +43,7 @@ namespace ExcelFormulaRemover
 
             var dropLabel = new Label
             {
-                Text = "Drag & Drop Excel Files Here\n(.xlsx, .xlsm files)",
+                Text = "엑셀 파일을 여기에 드래그하세요\n(.xlsx, .xlsm 파일)",
                 Location = new System.Drawing.Point(150, 40),
                 Size = new System.Drawing.Size(240, 40),
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
@@ -57,7 +57,7 @@ namespace ExcelFormulaRemover
             // Output Directory Selection
             var outputLabel = new Label
             {
-                Text = "Output Directory:",
+                Text = "출력 폴더:",
                 Location = new System.Drawing.Point(20, 160),
                 Size = new System.Drawing.Size(100, 20)
             };
@@ -71,7 +71,7 @@ namespace ExcelFormulaRemover
 
             browseButton = new Button
             {
-                Text = "Browse...",
+                Text = "찾아보기...",
                 Location = new System.Drawing.Point(480, 156),
                 Size = new System.Drawing.Size(80, 25)
             };
@@ -80,7 +80,7 @@ namespace ExcelFormulaRemover
             // File List
             var filesLabel = new Label
             {
-                Text = "Files to Process:",
+                Text = "처리할 파일:",
                 Location = new System.Drawing.Point(20, 200),
                 Size = new System.Drawing.Size(100, 20)
             };
@@ -96,7 +96,7 @@ namespace ExcelFormulaRemover
 
             var clearButton = new Button
             {
-                Text = "Clear",
+                Text = "지우기",
                 Location = new System.Drawing.Point(480, 220),
                 Size = new System.Drawing.Size(80, 25)
             };
@@ -105,7 +105,7 @@ namespace ExcelFormulaRemover
             // Process Button
             processButton = new Button
             {
-                Text = "Remove Formulas",
+                Text = "수식 제거",
                 Location = new System.Drawing.Point(20, 360),
                 Size = new System.Drawing.Size(120, 30),
                 Font = new System.Drawing.Font("Arial", 10, System.Drawing.FontStyle.Bold),
@@ -126,7 +126,7 @@ namespace ExcelFormulaRemover
             // Status Label
             statusLabel = new Label
             {
-                Text = "Ready - Drop files and select output directory",
+                Text = "준비 완료 - 파일을 드롭하고 출력 폴더를 선택하세요",
                 Location = new System.Drawing.Point(20, 410),
                 Size = new System.Drawing.Size(540, 20),
                 ForeColor = System.Drawing.Color.Blue
@@ -175,7 +175,7 @@ namespace ExcelFormulaRemover
                     }
                 }
 
-                statusLabel.Text = $"Added {excelFiles.Count()} Excel files";
+                statusLabel.Text = $"{excelFiles.Count()}개 엑셀 파일 추가됨";
                 UpdateUI();
             }
         }
@@ -184,7 +184,7 @@ namespace ExcelFormulaRemover
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Select output directory for processed files";
+                dialog.Description = "처리된 파일의 출력 폴더를 선택하세요";
                 
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
@@ -212,7 +212,7 @@ namespace ExcelFormulaRemover
                 var outputDir = outputDirectoryTextBox.Text;
                 var files = fileListBox.Items.Cast<string>().ToList();
 
-                statusLabel.Text = "Processing files...";
+                statusLabel.Text = "파일 처리 중...";
 
                 await Task.Run(() =>
                 {
@@ -221,13 +221,13 @@ namespace ExcelFormulaRemover
                         var inputFile = files[i];
                         var fileName = Path.GetFileNameWithoutExtension(inputFile);
                         var extension = Path.GetExtension(inputFile);
-                        var outputFile = Path.Combine(outputDir, $"{fileName}_NoFormulas{extension}");
+                        var outputFile = Path.Combine(outputDir, $"{fileName}_수식제거{extension}");
 
                         try
                         {
                             this.Invoke(new Action(() =>
                             {
-                                statusLabel.Text = $"Processing: {Path.GetFileName(inputFile)}";
+                                statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)}";
                             }));
 
                             ConvertFormulasToValues(inputFile, outputFile);
@@ -241,20 +241,20 @@ namespace ExcelFormulaRemover
                         {
                             this.Invoke(new Action(() =>
                             {
-                                MessageBox.Show($"Error processing {Path.GetFileName(inputFile)}:\n{ex.Message}",
-                                              "Processing Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                MessageBox.Show($"{Path.GetFileName(inputFile)} 처리 중 오류:\n{ex.Message}",
+                                              "처리 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }));
                         }
                     }
                 });
 
-                statusLabel.Text = $"Completed! Processed {files.Count} files.";
-                MessageBox.Show($"Successfully processed {files.Count} files!\nOutput directory: {outputDir}",
-                              "Process Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                statusLabel.Text = $"완료! {files.Count}개 파일 처리됨.";
+                MessageBox.Show($"{files.Count}개 파일 처리 완료!\n출력 폴더: {outputDir}",
+                              "처리 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"An error occurred: {ex.Message}", "Error", 
+                MessageBox.Show($"오류가 발생했습니다: {ex.Message}", "오류", 
                               MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
