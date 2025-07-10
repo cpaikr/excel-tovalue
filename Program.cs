@@ -5,18 +5,19 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
+using WinFormsControl = System.Windows.Forms.Control;
 
 namespace ExcelFormulaRemover
 {
     public partial class MainForm : Form
     {
-        private TextBox outputDirectoryTextBox;
-        private Button browseButton;
-        private ListBox fileListBox;
-        private Button processButton;
-        private ProgressBar progressBar;
-        private Label statusLabel;
-        private Panel dropPanel;
+        private TextBox outputDirectoryTextBox = null!;
+        private Button browseButton = null!;
+        private ListBox fileListBox = null!;
+        private Button processButton = null!;
+        private ProgressBar progressBar = null!;
+        private Label statusLabel = null!;
+        private Panel dropPanel = null!;
 
         public MainForm()
         {
@@ -132,7 +133,7 @@ namespace ExcelFormulaRemover
             };
 
             // Add all controls
-            this.Controls.AddRange(new Control[] {
+            this.Controls.AddRange(new WinFormsControl[] {
                 dropPanel, outputLabel, outputDirectoryTextBox, browseButton,
                 filesLabel, fileListBox, clearButton, processButton,
                 progressBar, statusLabel
@@ -141,11 +142,11 @@ namespace ExcelFormulaRemover
             UpdateUI();
         }
 
-        private void DropPanel_DragEnter(object sender, DragEventArgs e)
+        private void DropPanel_DragEnter(object? sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
-                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
                 if (files.Any(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || 
                                    f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -155,13 +156,13 @@ namespace ExcelFormulaRemover
             }
         }
 
-        private void DropPanel_DragDrop(object sender, DragEventArgs e)
+        private void DropPanel_DragDrop(object? sender, DragEventArgs e)
         {
             dropPanel.BackColor = System.Drawing.Color.LightBlue;
             
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
-                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
                 var excelFiles = files.Where(f => 
                     f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || 
                     f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase));
@@ -179,7 +180,7 @@ namespace ExcelFormulaRemover
             }
         }
 
-        private void BrowseButton_Click(object sender, EventArgs e)
+        private void BrowseButton_Click(object? sender, EventArgs e)
         {
             using (var dialog = new FolderBrowserDialog())
             {
@@ -199,7 +200,7 @@ namespace ExcelFormulaRemover
                                    !string.IsNullOrEmpty(outputDirectoryTextBox.Text);
         }
 
-        private async void ProcessButton_Click(object sender, EventArgs e)
+        private async void ProcessButton_Click(object? sender, EventArgs e)
         {
             try
             {
@@ -271,7 +272,7 @@ namespace ExcelFormulaRemover
 
             using var document = SpreadsheetDocument.Open(outputFile, true);
             
-            foreach (var worksheetPart in document.WorkbookPart.WorksheetParts)
+            foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
             {
                 var worksheet = worksheetPart.Worksheet;
                 var cells = worksheet.Descendants<Cell>().Where(c => c.CellFormula != null).ToList();
