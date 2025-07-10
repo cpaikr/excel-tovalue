@@ -7,6 +7,7 @@ namespace ExcelFormulaRemover
     using System;
     using System.IO;
     using System.Linq;
+    using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
     using System.Windows.Forms;
@@ -24,6 +25,8 @@ namespace ExcelFormulaRemover
         private ProgressBar progressBar = null!;
         private Label statusLabel = null!;
         private Panel dropPanel = null!;
+        private Label startRowLabel = null!;
+        private TextBox startRowTextBox = null!;
         private CancellationTokenSource? cancellationTokenSource;
         private bool isProcessing = false;
 
@@ -35,7 +38,7 @@ namespace ExcelFormulaRemover
         private void InitializeComponent()
         {
             this.Text = "엑셀 수식 제거기";
-            this.Size = new System.Drawing.Size(600, 500);
+            this.Size = new System.Drawing.Size(600, 530);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.AllowDrop = true;
 
@@ -110,11 +113,27 @@ namespace ExcelFormulaRemover
             };
             clearButton.Click += (s, e) => this.fileListBox.Items.Clear();
 
+            // Start Row Input
+            this.startRowLabel = new Label
+            {
+                Text = "수식제거 시작행(포함):",
+                Location = new System.Drawing.Point(20, 347),
+                Size = new System.Drawing.Size(150, 20),
+            };
+
+            this.startRowTextBox = new TextBox
+            {
+                Location = new System.Drawing.Point(175, 345),
+                Size = new System.Drawing.Size(50, 20),
+                Text = "1",
+                MaxLength = 3,
+            };
+
             // Process Button
             this.processButton = new Button
             {
                 Text = "수식 제거",
-                Location = new System.Drawing.Point(20, 360),
+                Location = new System.Drawing.Point(20, 375),
                 Size = new System.Drawing.Size(120, 30),
                 Font = new System.Drawing.Font("Arial", 10, System.Drawing.FontStyle.Bold),
                 BackColor = System.Drawing.Color.Green,
@@ -126,7 +145,7 @@ namespace ExcelFormulaRemover
             // Progress Bar
             this.progressBar = new ProgressBar
             {
-                Location = new System.Drawing.Point(160, 365),
+                Location = new System.Drawing.Point(160, 380),
                 Size = new System.Drawing.Size(280, 20),
                 Visible = false,
             };
@@ -135,7 +154,7 @@ namespace ExcelFormulaRemover
             this.stopButton = new Button
             {
                 Text = "중지",
-                Location = new System.Drawing.Point(450, 365),
+                Location = new System.Drawing.Point(450, 380),
                 Size = new System.Drawing.Size(90, 20),
                 BackColor = System.Drawing.Color.Red,
                 ForeColor = System.Drawing.Color.White,
@@ -148,7 +167,7 @@ namespace ExcelFormulaRemover
             this.statusLabel = new Label
             {
                 Text = "준비 완료 - 파일을 드롭하고 출력 폴더를 선택하세요",
-                Location = new System.Drawing.Point(20, 410),
+                Location = new System.Drawing.Point(20, 425),
                 Size = new System.Drawing.Size(540, 20),
                 ForeColor = System.Drawing.Color.Blue,
             };
@@ -156,8 +175,8 @@ namespace ExcelFormulaRemover
             // Add all controls
             this.Controls.AddRange(
                 this.dropPanel, outputLabel, this.outputDirectoryTextBox, this.browseButton,
-                filesLabel, this.fileListBox, clearButton, this.processButton,
-                this.progressBar, this.stopButton, this.statusLabel);
+                filesLabel, this.fileListBox, clearButton, this.startRowLabel, this.startRowTextBox,
+                this.processButton, this.progressBar, this.stopButton, this.statusLabel);
 
             this.UpdateUI();
         }
@@ -249,6 +268,14 @@ namespace ExcelFormulaRemover
                 return;
             }
 
+            // Validate start row input
+            if (!this.ValidateStartRow(out int startRow))
+            {
+                this.statusLabel.Text = "오류: 시작행 입력을 확인해주세요";
+                this.statusLabel.ForeColor = System.Drawing.Color.Red;
+                return;
+            }
+
             // Reset status label color to normal
             this.statusLabel.ForeColor = System.Drawing.Color.Blue;
 
@@ -292,7 +319,7 @@ namespace ExcelFormulaRemover
                                 this.statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)}";
                             }));
 
-                            this.ConvertFormulasToValues(inputFile, currentOutputFile, this.cancellationTokenSource.Token);
+                            this.ConvertFormulasToValues(inputFile, currentOutputFile, startRow, this.cancellationTokenSource.Token);
 
                             completedFiles++;
                         }
@@ -380,7 +407,7 @@ namespace ExcelFormulaRemover
             }
         }
 
-        private void ConvertFormulasToValues(string inputFile, string outputFile, CancellationToken cancellationToken)
+        private void ConvertFormulasToValues(string inputFile, string outputFile, int startingRow, CancellationToken cancellationToken)
         {
             // Copy file first to preserve original
             File.Copy(inputFile, outputFile, true);
@@ -390,10 +417,12 @@ namespace ExcelFormulaRemover
             int totalFormulas = 0;
             int processedFormulas = 0;
 
-            // First, count total formulas across all worksheets
+            // First, count total formulas across all worksheets from starting row
             totalFormulas = document.WorkbookPart!.WorksheetParts
                 .Select(worksheetPart => worksheetPart.Worksheet)
-                .Sum(worksheet => worksheet.Descendants<Cell>().Count(c => c.CellFormula != null));
+                .Sum(worksheet => worksheet.Descendants<Cell>().Count(c =>
+                    c.CellFormula != null &&
+                    this.GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow));
 
             // Now process the formulas
             var worksheets = document.WorkbookPart!.WorksheetParts.Select(worksheetPart => worksheetPart.Worksheet);
@@ -402,7 +431,9 @@ namespace ExcelFormulaRemover
                 // Check for cancellation before processing each worksheet
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var cells = worksheet.Descendants<Cell>().Where(c => c.CellFormula != null).ToList();
+                var cells = worksheet.Descendants<Cell>().Where(c =>
+                    c.CellFormula != null &&
+                    this.GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow).ToList();
 
                 foreach (var cell in cells)
                 {
@@ -460,6 +491,55 @@ namespace ExcelFormulaRemover
             }
 
             document.Save();
+        }
+
+        private int GetRowNumberFromCellReference(string cellReference)
+        {
+            if (string.IsNullOrEmpty(cellReference))
+            {
+                return 0;
+            }
+
+            var match = Regex.Match(cellReference, @"\d+$");
+            return match.Success ? int.Parse(match.Value) : 0;
+        }
+
+        private bool ValidateStartRow(out int startRow)
+        {
+            startRow = 1;
+            var input = this.startRowTextBox.Text.Trim();
+
+            if (string.IsNullOrEmpty(input))
+            {
+                MessageBox.Show(
+                    "수식제거 시작행을 입력해주세요!\n\n1부터 100 사이의 숫자를 입력하세요.",
+                    "시작행 입력 필요",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (!int.TryParse(input, out startRow))
+            {
+                MessageBox.Show(
+                    "올바른 숫자를 입력해주세요!\n\n1부터 100 사이의 정수를 입력하세요.",
+                    "잘못된 입력",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (startRow < 1 || startRow > 100)
+            {
+                MessageBox.Show(
+                    "시작행은 1부터 100 사이의 값이어야 합니다!\n\n현재 입력값: " + startRow,
+                    "범위 오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            return true;
         }
     }
 }
