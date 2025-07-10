@@ -5,6 +5,7 @@
 namespace ExcelFormulaRemover
 {
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using System.Linq;
     using System.Text.RegularExpressions;
@@ -27,6 +28,9 @@ namespace ExcelFormulaRemover
         private Panel dropPanel = null!;
         private Label startRowLabel = null!;
         private TextBox startRowTextBox = null!;
+        private Label excludePatternLabel = null!;
+        private TextBox excludePatternTextBox = null!;
+        private ToolTip excludePatternToolTip = null!;
         private CancellationTokenSource? cancellationTokenSource;
         private bool isProcessing = false;
 
@@ -38,7 +42,7 @@ namespace ExcelFormulaRemover
         private void InitializeComponent()
         {
             this.Text = "엑셀 수식 제거기";
-            this.Size = new System.Drawing.Size(600, 530);
+            this.Size = new System.Drawing.Size(600, 560);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.AllowDrop = true;
 
@@ -129,11 +133,33 @@ namespace ExcelFormulaRemover
                 MaxLength = 3,
             };
 
+            // Exclude Pattern Input
+            this.excludePatternLabel = new Label
+            {
+                Text = "다음 텍스트를 포함하는 시트는 수식 유지:",
+                Location = new System.Drawing.Point(20, 375),
+                Size = new System.Drawing.Size(270, 20),
+            };
+
+            this.excludePatternTextBox = new TextBox
+            {
+                Location = new System.Drawing.Point(295, 373),
+                Size = new System.Drawing.Size(100, 20),
+                PlaceholderText = "예: TF",
+                MaxLength = 50,
+            };
+
+            // Tooltip for exclude pattern
+            this.excludePatternToolTip = new ToolTip();
+            this.excludePatternToolTip.SetToolTip(
+                this.excludePatternTextBox,
+                "입력한 텍스트를 포함하는 시트 이름은 수식을 유지합니다\n(예: TF 입력시 TF_Summary, Data_TF 등의 시트는 수식 유지)");
+
             // Process Button
             this.processButton = new Button
             {
                 Text = "수식 제거",
-                Location = new System.Drawing.Point(20, 375),
+                Location = new System.Drawing.Point(20, 405),
                 Size = new System.Drawing.Size(120, 30),
                 Font = new System.Drawing.Font("Arial", 10, System.Drawing.FontStyle.Bold),
                 BackColor = System.Drawing.Color.Green,
@@ -145,7 +171,7 @@ namespace ExcelFormulaRemover
             // Progress Bar
             this.progressBar = new ProgressBar
             {
-                Location = new System.Drawing.Point(160, 380),
+                Location = new System.Drawing.Point(160, 410),
                 Size = new System.Drawing.Size(280, 20),
                 Visible = false,
             };
@@ -154,7 +180,7 @@ namespace ExcelFormulaRemover
             this.stopButton = new Button
             {
                 Text = "중지",
-                Location = new System.Drawing.Point(450, 380),
+                Location = new System.Drawing.Point(450, 410),
                 Size = new System.Drawing.Size(90, 20),
                 BackColor = System.Drawing.Color.Red,
                 ForeColor = System.Drawing.Color.White,
@@ -167,7 +193,7 @@ namespace ExcelFormulaRemover
             this.statusLabel = new Label
             {
                 Text = "준비 완료 - 파일을 드롭하고 출력 폴더를 선택하세요",
-                Location = new System.Drawing.Point(20, 425),
+                Location = new System.Drawing.Point(20, 455),
                 Size = new System.Drawing.Size(540, 20),
                 ForeColor = System.Drawing.Color.Blue,
             };
@@ -176,6 +202,7 @@ namespace ExcelFormulaRemover
             this.Controls.AddRange(
                 this.dropPanel, outputLabel, this.outputDirectoryTextBox, this.browseButton,
                 filesLabel, this.fileListBox, clearButton, this.startRowLabel, this.startRowTextBox,
+                this.excludePatternLabel, this.excludePatternTextBox,
                 this.processButton, this.progressBar, this.stopButton, this.statusLabel);
 
             this.UpdateUI();
@@ -314,12 +341,8 @@ namespace ExcelFormulaRemover
 
                         try
                         {
-                            this.Invoke(new Action(() =>
-                            {
-                                this.statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)}";
-                            }));
-
-                            this.ConvertFormulasToValues(inputFile, currentOutputFile, startRow, this.cancellationTokenSource.Token);
+                            var excludePattern = this.excludePatternTextBox.Text.Trim();
+                            this.ConvertFormulasToValues(inputFile, currentOutputFile, startRow, excludePattern, this.cancellationTokenSource.Token);
 
                             completedFiles++;
                         }
@@ -407,7 +430,7 @@ namespace ExcelFormulaRemover
             }
         }
 
-        private void ConvertFormulasToValues(string inputFile, string outputFile, int startingRow, CancellationToken cancellationToken)
+        private void ConvertFormulasToValues(string inputFile, string outputFile, int startingRow, string excludePattern, CancellationToken cancellationToken)
         {
             // Copy file first to preserve original
             File.Copy(inputFile, outputFile, true);
@@ -417,15 +440,49 @@ namespace ExcelFormulaRemover
             int totalFormulas = 0;
             int processedFormulas = 0;
 
-            // First, count total formulas across all worksheets from starting row
-            totalFormulas = document.WorkbookPart!.WorksheetParts
-                .Select(worksheetPart => worksheetPart.Worksheet)
+            // Filter worksheets based on exclusion pattern
+            var workbook = document.WorkbookPart!.Workbook;
+            var sheets = workbook.Sheets!.Cast<Sheet>().ToList();
+
+            // Get sheets to process (exclude those matching the pattern)
+            var sheetsToProcess = sheets;
+            var excludedSheets = new List<Sheet>();
+
+            if (!string.IsNullOrWhiteSpace(excludePattern))
+            {
+                excludedSheets = sheets.Where(s =>
+                    s.Name!.Value!.Contains(excludePattern.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+                sheetsToProcess = sheets.Where(s =>
+                    !s.Name!.Value!.Contains(excludePattern.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            // Get corresponding worksheet parts
+            var worksheetPartsToProcess = sheetsToProcess.Select(sheet =>
+                document.WorkbookPart.GetPartById(sheet.Id!.Value!) as WorksheetPart)
+                .Where(part => part != null)
+                .ToList();
+
+            // First, count total formulas across filtered worksheets from starting row
+            totalFormulas = worksheetPartsToProcess
+                .Select(worksheetPart => worksheetPart!.Worksheet)
                 .Sum(worksheet => worksheet.Descendants<Cell>().Count(c =>
                     c.CellFormula != null &&
                     this.GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow));
 
+            // Update status with sheet processing information
+            var fileName = Path.GetFileName(inputFile);
+            var statusMessage = excludedSheets.Count > 0
+                ? $"처리 중: {fileName} - {sheetsToProcess.Count}개 시트 처리 중 ({excludedSheets.Count}개 시트 제외)"
+                : $"처리 중: {fileName} - {sheetsToProcess.Count}개 시트 처리 중";
+
+            this.Invoke(new Action(() =>
+            {
+                this.statusLabel.Text = statusMessage;
+            }));
+
             // Now process the formulas
-            var worksheets = document.WorkbookPart!.WorksheetParts.Select(worksheetPart => worksheetPart.Worksheet);
+            var worksheets = worksheetPartsToProcess.Select(worksheetPart => worksheetPart!.Worksheet);
             foreach (var worksheet in worksheets)
             {
                 // Check for cancellation before processing each worksheet
