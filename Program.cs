@@ -296,6 +296,21 @@ namespace ExcelFormulaRemover
                 }
             }
 
+            // Remove calculation chain to prevent corruption warnings
+            // Since we've removed all formulas, the calculation chain is no longer needed
+            try
+            {
+                var calculationChainPart = document.WorkbookPart!.CalculationChainPart;
+                if (calculationChainPart != null)
+                {
+                    document.WorkbookPart.DeletePart(calculationChainPart);
+                }
+            }
+            catch
+            {
+                // Ignore errors if calculation chain doesn't exist or can't be removed
+            }
+
             document.Save();
         }
     }
