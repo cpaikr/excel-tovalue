@@ -275,6 +275,17 @@ namespace ExcelFormulaRemover
 
             using var document = SpreadsheetDocument.Open(outputFile, true);
             
+            int totalFormulas = 0;
+            int processedFormulas = 0;
+            
+            // First, count total formulas across all worksheets
+            foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
+            {
+                var worksheet = worksheetPart.Worksheet;
+                totalFormulas += worksheet.Descendants<Cell>().Count(c => c.CellFormula != null);
+            }
+            
+            // Now process the formulas
             foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
             {
                 var worksheet = worksheetPart.Worksheet;
@@ -284,6 +295,20 @@ namespace ExcelFormulaRemover
                 {
                     try
                     {
+                        processedFormulas++;
+                        
+                        // Update status with formula progress every 1000 formulas for better performance
+                        if (processedFormulas % 1000 == 0 || processedFormulas == totalFormulas)
+                        {
+                            this.Invoke(new Action(() =>
+                            {
+                                // Display counts in millions with two decimal places
+                                double processedMillions = processedFormulas / 1000000.0;
+                                double totalMillions = totalFormulas / 1000000.0;
+                                statusLabel.Text = $"처리 중: {Path.GetFileName(inputFile)} - 수식 {processedMillions:F2}백만개 / {totalMillions:F2}백만개";
+                            }));
+                        }
+                        
                         // Keep the calculated value, remove the formula
                         var calculatedValue = cell.CellValue?.Text;
                         if (calculatedValue != null)

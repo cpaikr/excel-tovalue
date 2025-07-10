@@ -10,7 +10,7 @@
 ### Solution
 - **Development Environment**: Use Windows Command Prompt/PowerShell instead of WSL
 - **Build Commands**: Run `dotnet build` and `dotnet publish` from Windows terminal
-- **File Access**: Project files are accessible from Windows at `/mnt/c/Users/user/Documents/IT/excel-tovalue/`
+- **File Access**: Project files are accessible from Windows at `C:\Users\user\Documents\IT\excel-tovalue\`
 
 ## Build Instructions
 
