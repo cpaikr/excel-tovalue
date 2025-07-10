@@ -154,12 +154,11 @@ namespace ExcelFormulaRemover
             };
 
             // Add all controls
-            this.Controls.AddRange(new WinFormsControl[]
-            {
+            this.Controls.AddRange([
                 this.dropPanel, outputLabel, this.outputDirectoryTextBox, this.browseButton,
                 filesLabel, this.fileListBox, clearButton, this.processButton,
                 this.progressBar, this.stopButton, this.statusLabel,
-            });
+            ]);
 
             this.UpdateUI();
         }
@@ -169,8 +168,8 @@ namespace ExcelFormulaRemover
             if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
             {
                 var files = (string[] ?)e.Data.GetData(DataFormats.FileDrop);
-                if (files != null && files.Any(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
-                                   f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)))
+                if (files != null && Array.Exists(files, f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+                                                   f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)))
                 {
                     e.Effect = DragDropEffects.Copy;
                     this.dropPanel.BackColor = System.Drawing.Color.LightGreen;
@@ -231,7 +230,9 @@ namespace ExcelFormulaRemover
             {
                 MessageBox.Show(
                     "출력 폴더를 선택해주세요!\n\n처리된 파일이 저장될 폴더를 지정해야 합니다.",
-                    "출력 폴더 미선택", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "출력 폴더 미선택",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 this.statusLabel.Text = "오류: 출력 폴더를 선택해주세요";
                 this.statusLabel.ForeColor = System.Drawing.Color.Red;
                 return;
@@ -241,7 +242,9 @@ namespace ExcelFormulaRemover
             {
                 MessageBox.Show(
                     "처리할 엑셀 파일을 추가해주세요!\n\n파일을 드래그하여 추가하거나 선택해주세요.",
-                    "처리할 파일 없음", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "처리할 파일 없음",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 this.statusLabel.Text = "오류: 처리할 파일을 추가해주세요";
                 this.statusLabel.ForeColor = System.Drawing.Color.Red;
                 return;
@@ -316,7 +319,9 @@ namespace ExcelFormulaRemover
                             {
                                 MessageBox.Show(
                                     $"{Path.GetFileName(inputFile)} 처리 중 오류:\n{ex.Message}",
-                                    "처리 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                    "처리 오류",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning);
                             }));
                         }
                     }
@@ -328,19 +333,26 @@ namespace ExcelFormulaRemover
                               "★★★ 중요 ★★★\n" +
                               "반드시 산출 파일을 열어서 정상적으로 변환되었는지 확인하세요!\n" +
                               "수식이 값으로 올바르게 대체되었는지 검증이 필요합니다.",
-                    "처리 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "처리 완료",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)
             {
                 this.statusLabel.Text = $"처리 중지됨. {completedFiles}개 파일 완료.";
                 MessageBox.Show(
                     $"사용자에 의해 처리가 중지되었습니다.\n완료된 파일: {completedFiles}개\n출력 폴더: {outputDir}",
-                    "처리 중지", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "처리 중지",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"오류가 발생했습니다: {ex.Message}", "오류",
-                              MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    $"오류가 발생했습니다: {ex.Message}",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
             finally
             {
@@ -380,19 +392,17 @@ namespace ExcelFormulaRemover
             int processedFormulas = 0;
 
             // First, count total formulas across all worksheets
-            foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
-            {
-                var worksheet = worksheetPart.Worksheet;
-                totalFormulas += worksheet.Descendants<Cell>().Count(c => c.CellFormula != null);
-            }
+            totalFormulas = document.WorkbookPart!.WorksheetParts
+                .Select(worksheetPart => worksheetPart.Worksheet)
+                .Sum(worksheet => worksheet.Descendants<Cell>().Count(c => c.CellFormula != null));
 
             // Now process the formulas
-            foreach (var worksheetPart in document.WorkbookPart!.WorksheetParts)
+            var worksheets = document.WorkbookPart!.WorksheetParts.Select(worksheetPart => worksheetPart.Worksheet);
+            foreach (var worksheet in worksheets)
             {
                 // Check for cancellation before processing each worksheet
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var worksheet = worksheetPart.Worksheet;
                 var cells = worksheet.Descendants<Cell>().Where(c => c.CellFormula != null).ToList();
 
                 foreach (var cell in cells)
@@ -454,7 +464,7 @@ namespace ExcelFormulaRemover
         }
     }
 
-    internal class Program
+    internal static class Program
     {
         [STAThread]
         private static void Main()
