@@ -145,15 +145,15 @@ namespace ExcelFormulaRemover
             {
                 Location = new System.Drawing.Point(295, 373),
                 Size = new System.Drawing.Size(100, 20),
-                PlaceholderText = "예: TF",
-                MaxLength = 50,
+                PlaceholderText = "TF, 변동성",
+                MaxLength = 100,
             };
 
             // Tooltip for exclude pattern
             this.excludePatternToolTip = new ToolTip();
             this.excludePatternToolTip.SetToolTip(
                 this.excludePatternTextBox,
-                "입력한 텍스트를 포함하는 시트 이름은 수식을 유지합니다\n(예: TF 입력시 TF_Summary, Data_TF 등의 시트는 수식 유지)");
+                "입력한 텍스트를 포함하는 시트 이름은 수식을 유지합니다\n(여러 패턴은 콤마로 구분: TF, 변동성)\n(예: TF 입력시 TF_Summary, Data_TF 등의 시트는 수식 유지)");
 
             // Process Button
             this.processButton = new Button
@@ -450,11 +450,17 @@ namespace ExcelFormulaRemover
 
             if (!string.IsNullOrWhiteSpace(excludePattern))
             {
+                // Split by comma and trim each pattern
+                var patterns = excludePattern.Split(',')
+                    .Select(p => p.Trim())
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToList();
+
                 excludedSheets = sheets.Where(s =>
-                    s.Name!.Value!.Contains(excludePattern.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+                    patterns.Any(pattern => s.Name!.Value!.Contains(pattern, StringComparison.OrdinalIgnoreCase))).ToList();
 
                 sheetsToProcess = sheets.Where(s =>
-                    !s.Name!.Value!.Contains(excludePattern.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+                    !patterns.Any(pattern => s.Name!.Value!.Contains(pattern, StringComparison.OrdinalIgnoreCase))).ToList();
             }
 
             // Get corresponding worksheet parts

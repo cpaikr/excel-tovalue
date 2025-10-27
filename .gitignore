@@ -206,6 +206,10 @@ DocProject/Help/html
 # Click-Once directory
 publish/
 
+# Published executables
+published/
+*.exe
+
 # Publish Web Output
 *.[Pp]ublish.xml
 *.azurePubxml
