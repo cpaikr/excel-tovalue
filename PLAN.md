@@ -16,7 +16,7 @@ without modifying source workbooks or overwriting earlier outputs.
 - [x] Extract and test the workbook conversion engine.
 - [x] Add a non-interactive command-line workflow.
 - [x] Rebuild the WinForms workflow around the tested engine.
-- [ ] Replace stale build scripts and documentation; run the full release gate.
+- [x] Replace stale build scripts and documentation; run the full release gate.
 
 ## Product constraints
 
@@ -29,6 +29,15 @@ without modifying source workbooks or overwriting earlier outputs.
 - `.xlsm` VBA content and formulas outside the selected scope are preserved.
 - Windows is required only for the graphical app. The conversion engine and
   command-line workflow remain independently testable.
+
+## Validation
+
+- Pinned .NET SDK `10.0.110` locked restore and Release build: clean, zero
+  warnings.
+- Automated tests: 76 passed across Core, CLI, and App projects.
+- Direct and transitive dependency vulnerability audit: clean.
+- GUI single-file and portable CLI release bundles: published and checksum
+  verified.
 
 ## Open questions
 

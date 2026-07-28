@@ -47,15 +47,15 @@ cancel behavior.
    OpenXML, implement the conversion module, and add behavior tests.
 2. [Complete] Add the CLI and test its parsing and exit behavior.
 3. [Complete] Rebuild the WinForms app and verify its lifecycle and layout.
-4. Replace automation and documentation, remove tracked local IDE state, and
-   run format, build, test, dependency, and publish checks.
+4. [Complete] Replace automation and documentation, remove tracked local IDE
+   state, and run format, build, test, dependency, and publish checks.
 
 ## Completion gate
 
-- formatting verification is clean;
-- Release build has zero warnings;
-- all tests pass;
-- vulnerable-package scan is clean;
-- GUI and CLI publish successfully;
-- docs match the final behavior;
-- every slice is committed with a Conventional Commit message.
+- [x] Formatting verification is clean.
+- [x] Release build has zero warnings.
+- [x] All tests pass.
+- [x] Vulnerable-package scan is clean.
+- [x] GUI and CLI publish successfully.
+- [x] Docs match the final behavior.
+- [x] Every slice is committed with a Conventional Commit message.
