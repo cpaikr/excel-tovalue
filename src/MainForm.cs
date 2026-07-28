@@ -6,6 +6,7 @@ namespace ExcelFormulaRemover
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.IO;
     using System.Linq;
     using System.Text.RegularExpressions;
@@ -32,7 +33,7 @@ namespace ExcelFormulaRemover
         private TextBox excludePatternTextBox = null!;
         private ToolTip excludePatternToolTip = null!;
         private CancellationTokenSource? cancellationTokenSource;
-        private bool isProcessing = false;
+        private bool isProcessing;
 
         public MainForm()
         {
@@ -212,7 +213,7 @@ namespace ExcelFormulaRemover
         {
             if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
             {
-                var files = (string[] ?)e.Data.GetData(DataFormats.FileDrop);
+                var files = (string[]?)e.Data.GetData(DataFormats.FileDrop);
                 if (files != null && Array.Exists(files, f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ||
                                                    f.EndsWith(".xlsm", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -228,7 +229,7 @@ namespace ExcelFormulaRemover
 
             if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
             {
-                var files = (string[] ?)e.Data.GetData(DataFormats.FileDrop);
+                var files = (string[]?)e.Data.GetData(DataFormats.FileDrop);
                 if (files != null)
                 {
                     var excelFiles = files.Where(f =>
@@ -441,8 +442,10 @@ namespace ExcelFormulaRemover
             int processedFormulas = 0;
 
             // Filter worksheets based on exclusion pattern
-            var workbook = document.WorkbookPart!.Workbook;
-            var sheets = workbook.Sheets!.Cast<Sheet>().ToList();
+            var workbook = document.WorkbookPart?.Workbook ??
+                throw new InvalidDataException("Workbook is missing its root element.");
+            var sheets = workbook.Sheets?.Cast<Sheet>().ToList() ??
+                throw new InvalidDataException("Workbook has no sheets collection.");
 
             // Get sheets to process (exclude those matching the pattern)
             var sheetsToProcess = sheets;
@@ -472,9 +475,9 @@ namespace ExcelFormulaRemover
             // First, count total formulas across filtered worksheets from starting row
             totalFormulas = worksheetPartsToProcess
                 .Select(worksheetPart => worksheetPart!.Worksheet)
-                .Sum(worksheet => worksheet.Descendants<Cell>().Count(c =>
+                .Sum(worksheet => worksheet!.Descendants<Cell>().Count(c =>
                     c.CellFormula != null &&
-                    this.GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow));
+                    GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow));
 
             // Update status with sheet processing information
             var fileName = Path.GetFileName(inputFile);
@@ -494,9 +497,9 @@ namespace ExcelFormulaRemover
                 // Check for cancellation before processing each worksheet
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var cells = worksheet.Descendants<Cell>().Where(c =>
+                var cells = worksheet!.Descendants<Cell>().Where(c =>
                     c.CellFormula != null &&
-                    this.GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow).ToList();
+                    GetRowNumberFromCellReference(c.CellReference?.Value ?? string.Empty) >= startingRow).ToList();
 
                 foreach (var cell in cells)
                 {
@@ -556,7 +559,7 @@ namespace ExcelFormulaRemover
             document.Save();
         }
 
-        private int GetRowNumberFromCellReference(string cellReference)
+        private static int GetRowNumberFromCellReference(string cellReference)
         {
             if (string.IsNullOrEmpty(cellReference))
             {
@@ -564,7 +567,7 @@ namespace ExcelFormulaRemover
             }
 
             var match = Regex.Match(cellReference, @"\d+$");
-            return match.Success ? int.Parse(match.Value) : 0;
+            return match.Success ? int.Parse(match.Value, CultureInfo.InvariantCulture) : 0;
         }
 
         private bool ValidateStartRow(out int startRow)

@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CI)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <RestoreLockedMode>true</RestoreLockedMode>
+  </PropertyGroup>
+</Project>

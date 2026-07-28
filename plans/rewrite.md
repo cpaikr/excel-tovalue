@@ -43,8 +43,8 @@ cancel behavior.
 
 ## Delivery slices
 
-1. Restructure the solution, upgrade to supported .NET 10 LTS and OpenXML,
-   implement the conversion module, and add behavior tests.
+1. [Complete] Restructure the solution, upgrade to supported .NET 10 LTS and
+   OpenXML, implement the conversion module, and add behavior tests.
 2. Add the CLI and test its parsing and exit behavior.
 3. Rebuild the WinForms app and verify its lifecycle and layout.
 4. Replace automation and documentation, remove tracked local IDE state, and
