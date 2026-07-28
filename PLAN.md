@@ -15,7 +15,7 @@ without modifying source workbooks or overwriting earlier outputs.
 - [x] Audit correctness, architecture, dependencies, automation, and UX.
 - [x] Extract and test the workbook conversion engine.
 - [x] Add a non-interactive command-line workflow.
-- [ ] Rebuild the WinForms workflow around the tested engine.
+- [x] Rebuild the WinForms workflow around the tested engine.
 - [ ] Replace stale build scripts and documentation; run the full release gate.
 
 ## Product constraints
