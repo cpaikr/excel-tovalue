@@ -36,7 +36,12 @@ public static class FormulaRemovalEngine
     /// <returns>One explicit result for every requested input path.</returns>
     /// <exception cref="IOException">The output directory cannot be created or resolved.</exception>
     /// <exception cref="UnauthorizedAccessException">The output directory cannot be accessed.</exception>
-    /// <exception cref="OperationCanceledException">Cancellation was requested.</exception>
+    /// <exception cref="FormulaRemovalCanceledException">
+    /// Cancellation was observed after the batch started. The exception retains completed results.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Cancellation prevented the worker from starting.
+    /// </exception>
     public static Task<FormulaRemovalBatchResult> ConvertAsync(
         FormulaRemovalRequest request,
         IProgress<FormulaRemovalProgress>? progress = null,
@@ -64,34 +69,44 @@ public static class FormulaRemovalEngine
         OutputPathAllocator outputPaths = new(outputDirectory, inputPaths);
         List<FormulaRemovalFileResult> results = new(request.InputPaths.Count);
 
-        for (int index = 0; index < request.InputPaths.Count; index++)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            for (int index = 0; index < request.InputPaths.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            string inputPath = request.InputPaths[index];
-            progress?.Report(new FormulaRemovalProgress(
-                index,
-                request.InputPaths.Count,
-                inputPath,
-                null,
-                FormulaRemovalStage.StartingFile));
+                string inputPath = request.InputPaths[index];
+                progress?.Report(new FormulaRemovalProgress(
+                    index,
+                    request.InputPaths.Count,
+                    inputPath,
+                    null,
+                    FormulaRemovalStage.StartingFile));
 
-            FormulaRemovalFileResult result = ConvertFile(
-                inputPath,
-                request,
-                outputPaths,
-                seenInputs,
-                index,
-                progress,
-                cancellationToken);
+                FormulaRemovalFileResult result = ConvertFile(
+                    inputPath,
+                    request,
+                    outputPaths,
+                    seenInputs,
+                    index,
+                    progress,
+                    cancellationToken);
 
-            results.Add(result);
-            progress?.Report(new FormulaRemovalProgress(
-                index + 1,
-                request.InputPaths.Count,
-                inputPath,
-                null,
-                FormulaRemovalStage.CompletedFile));
+                results.Add(result);
+                progress?.Report(new FormulaRemovalProgress(
+                    index + 1,
+                    request.InputPaths.Count,
+                    inputPath,
+                    null,
+                    FormulaRemovalStage.CompletedFile));
+            }
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new FormulaRemovalCanceledException(
+                new FormulaRemovalBatchResult(results),
+                cancellationToken,
+                exception);
         }
 
         return new FormulaRemovalBatchResult(results);

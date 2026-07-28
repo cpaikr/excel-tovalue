@@ -14,7 +14,7 @@ without modifying source workbooks or overwriting earlier outputs.
   `before-rewrite-2026-07-28`.
 - [x] Audit correctness, architecture, dependencies, automation, and UX.
 - [x] Extract and test the workbook conversion engine.
-- [ ] Add a non-interactive command-line workflow.
+- [x] Add a non-interactive command-line workflow.
 - [ ] Rebuild the WinForms workflow around the tested engine.
 - [ ] Replace stale build scripts and documentation; run the full release gate.
 

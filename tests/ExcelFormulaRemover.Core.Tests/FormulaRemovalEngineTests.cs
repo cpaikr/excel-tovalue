@@ -671,6 +671,52 @@ public sealed class FormulaRemovalEngineTests
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
 
+    [TestMethod]
+    public async Task CancellationRetainsResultsForAlreadyPublishedFiles()
+    {
+        string firstInput = Path.Combine(testDirectory, "First.xlsx");
+        string secondInput = Path.Combine(testDirectory, "Second.xlsx");
+        string outputDirectory = Path.Combine(testDirectory, "output");
+        CreateWorkbook(
+            firstInput,
+            false,
+            new SheetSpec("Data", new CellSpec("A1", "1+1", "2")));
+        CreateWorkbook(
+            secondInput,
+            false,
+            new SheetSpec("Data", new CellSpec("A1", "2+2", "4")));
+        using CancellationTokenSource cancellation = new();
+        InlineProgress<FormulaRemovalProgress> progress = new(value =>
+        {
+            if (value.InputPath == secondInput &&
+                value.Stage == FormulaRemovalStage.ProcessingWorksheet)
+            {
+                cancellation.Cancel();
+            }
+        });
+
+        FormulaRemovalCanceledException? canceled = null;
+        try
+        {
+            await FormulaRemovalEngine.ConvertAsync(
+                new FormulaRemovalRequest([firstInput, secondInput], outputDirectory),
+                progress,
+                cancellation.Token);
+        }
+        catch (FormulaRemovalCanceledException exception)
+        {
+            canceled = exception;
+        }
+
+        Assert.IsNotNull(canceled);
+        Assert.AreEqual(1, canceled.CompletedResult.SucceededCount);
+        FormulaRemovalFileResult published = canceled.CompletedResult.Files.Single();
+        Assert.AreEqual(firstInput, published.InputPath);
+        Assert.IsNotNull(published.OutputPath);
+        Assert.IsTrue(File.Exists(published.OutputPath));
+        Assert.HasCount(1, Directory.EnumerateFiles(outputDirectory).ToArray());
+    }
+
     private static void CreateWorkbook(
         string path,
         bool macroEnabled,

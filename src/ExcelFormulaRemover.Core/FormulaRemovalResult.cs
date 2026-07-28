@@ -1,5 +1,7 @@
 namespace ExcelFormulaRemover.Core;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 /// Categorizes a workbook that could not be converted.
 /// </summary>
@@ -101,4 +103,35 @@ public sealed class FormulaRemovalBatchResult
     /// Gets the number of failed inputs.
     /// </summary>
     public int FailedCount => Files.Count - SucceededCount;
+}
+
+/// <summary>
+/// Reports cancellation while retaining results for files that finished before it.
+/// </summary>
+[SuppressMessage(
+    "Design",
+    "CA1032:Implement standard exception constructors",
+    Justification = "Only the engine creates this result-carrying cancellation exception.")]
+public sealed class FormulaRemovalCanceledException : OperationCanceledException
+{
+    /// <summary>
+    /// Initializes a cancellation result for a partially completed batch.
+    /// </summary>
+    /// <param name="completedResult">Files completed before cancellation was observed.</param>
+    /// <param name="cancellationToken">The token that canceled the operation.</param>
+    /// <param name="innerException">The cancellation exception raised inside the engine.</param>
+    public FormulaRemovalCanceledException(
+        FormulaRemovalBatchResult completedResult,
+        CancellationToken cancellationToken,
+        Exception? innerException = null)
+        : base("The formula-removal batch was canceled.", innerException, cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(completedResult);
+        CompletedResult = completedResult;
+    }
+
+    /// <summary>
+    /// Gets the immutable results published before cancellation.
+    /// </summary>
+    public FormulaRemovalBatchResult CompletedResult { get; }
 }
