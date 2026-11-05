@@ -38,6 +38,17 @@ coverage*.info
 *.pubxml
 *.publishproj
 
+# Local secrets and private keys
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+secrets.json
+[Aa]ppsettings.[Ll]ocal.json
+[Aa]ppsettings.*.[Ll]ocal.json
+
 # Logs, temporary files, and OS metadata
 *.log
 *.tmp
@@ -46,4 +57,3 @@ coverage*.info
 Thumbs.db
 [Dd]esktop.ini
 $RECYCLE.BIN/
-
