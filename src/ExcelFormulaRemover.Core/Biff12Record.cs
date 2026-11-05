@@ -55,6 +55,8 @@ internal readonly record struct Biff12Record(int Type, byte[] Data)
 /// </summary>
 internal sealed class Biff12Reader(Stream stream)
 {
+    private const int DirectReadLength = 1024 * 1024;
+
     public bool TryRead(out Biff12Record record)
     {
         int first = stream.ReadByte();
@@ -92,18 +94,43 @@ internal sealed class Biff12Reader(Stream stream)
             }
         }
 
-        byte[] data = new byte[length];
+        record = new Biff12Record(type, ReadData(length));
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a record payload. Payloads above <see cref="DirectReadLength"/> grow with the bytes
+    /// actually present, so a corrupt size header fails at end of stream instead of first
+    /// allocating up to 256 MB.
+    /// </summary>
+    private byte[] ReadData(int length)
+    {
         try
         {
-            stream.ReadExactly(data);
+            if (length <= DirectReadLength)
+            {
+                byte[] data = new byte[length];
+                stream.ReadExactly(data);
+                return data;
+            }
+
+            using MemoryStream buffer = new(DirectReadLength);
+            byte[] chunk = new byte[DirectReadLength];
+            int remaining = length;
+            while (remaining > 0)
+            {
+                int count = Math.Min(remaining, chunk.Length);
+                stream.ReadExactly(chunk, 0, count);
+                buffer.Write(chunk, 0, count);
+                remaining -= count;
+            }
+
+            return buffer.ToArray();
         }
         catch (EndOfStreamException exception)
         {
             throw new InvalidDataException("A binary workbook record is truncated.", exception);
         }
-
-        record = new Biff12Record(type, data);
-        return true;
     }
 
     private int ReadRequiredByte()

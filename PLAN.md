@@ -45,13 +45,13 @@ files, without modifying source workbooks or overwriting earlier outputs.
 
 - Pinned .NET SDK `10.0.110` locked restore and Release build: clean, zero
   warnings.
-- Automated tests: 92 passed across Core, CLI, and App projects.
+- Automated tests: 93 passed across Core, CLI, and App projects.
 - Excel desktop round trip (2026-11-05): `.xlsb` and `.xlsx` outputs of
   Excel-saved workbooks with every formula result type, array, dynamic-array,
   data-table, and table calculated/totals formulas reopened in Excel with
   identical values and no remaining formulas in scope.
 - Direct and transitive dependency vulnerability audit: clean.
-- GUI single-file and portable CLI release bundles: `2.1.0` (adds `.xlsb`)
+- GUI single-file and portable CLI release bundles: `2.1.1` (`.xlsb` support)
   published and checksum verified; the released CLI converted Excel-saved
   `.xlsb` samples.
 

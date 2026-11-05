@@ -293,7 +293,7 @@ internal static class XlsbFormulaRemover
                 FileOptions.SequentialScan))
             using (Stream destination = sheetPart.GetStream(FileMode.Create, FileAccess.Write))
             {
-                transformed.CopyTo(destination, CopyBufferSize);
+                CopyWithCancellation(transformed, destination, cancellationToken);
             }
 
             // The binary index stores byte offsets into the original worksheet stream. It is an
@@ -304,6 +304,20 @@ internal static class XlsbFormulaRemover
         finally
         {
             TryDeleteFile(stagingPath);
+        }
+    }
+
+    private static void CopyWithCancellation(
+        Stream source,
+        Stream destination,
+        CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[CopyBufferSize];
+        int bytesRead;
+        while ((bytesRead = source.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            destination.Write(buffer, 0, bytesRead);
         }
     }
 
@@ -508,7 +522,7 @@ internal static class XlsbFormulaRemover
         Span<byte> flags = data.AsSpan(CalculationPropertiesLayout.FlagsOffset, sizeof(ushort));
         BinaryPrimitives.WriteUInt16LittleEndian(
             flags,
-            (ushort)(BinaryPrimitives.ReadUInt16LittleEndian(flags) | CalculationPropertiesLayout.FullCalcOnLoadFlag));
+            (ushort)(BinaryPrimitives.ReadUInt16LittleEndian(flags) | CalculationPropertiesLayout.ForceRecalculationFlags));
         records[index] = new Biff12Record(properties.Type, data);
 
         using Stream destination = workbookPart.GetStream(FileMode.Create, FileAccess.Write);
@@ -761,7 +775,13 @@ internal static class XlsbFormulaRemover
         public const int RecalcIdOffset = 0;
         public const int AutoRecalcOffset = 4;
         public const int FlagsOffset = 24;
-        public const ushort FullCalcOnLoadFlag = 0x0001;
+
+        /// <summary>
+        /// fFullCalcOnLoad (bit 0), fSomeUncalced (bit 4), and fNoDeps (bit 8): the binary
+        /// forms of .xlsx fullCalcOnLoad, calcCompleted="0", and forceFullCalc, confirmed by
+        /// saving Excel workbooks with each setting.
+        /// </summary>
+        public const ushort ForceRecalculationFlags = 0x0001 | 0x0010 | 0x0100;
     }
 
     /// <summary>BrtBeginList fixed-field offsets.</summary>

@@ -108,7 +108,8 @@ public sealed class XlsbFormulaRemovalTests
         Record calcProperties = ReadRecords(result.OutputPath!, WorkbookUri)
             .Single(record => record.Type == CalcProperties);
         Assert.AreEqual(0U, BinaryPrimitives.ReadUInt32LittleEndian(calcProperties.Data));
-        Assert.AreEqual(1, BinaryPrimitives.ReadUInt16LittleEndian(calcProperties.Data.AsSpan(24)) & 1);
+        // Excel's saved 0x006A plus fFullCalcOnLoad, fSomeUncalced, and fNoDeps.
+        Assert.AreEqual(0x017B, BinaryPrimitives.ReadUInt16LittleEndian(calcProperties.Data.AsSpan(24)));
     }
 
     [TestMethod]
@@ -355,6 +356,22 @@ public sealed class XlsbFormulaRemovalTests
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath, outputDirectory: outputDirectory);
 
         Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind);
+        Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
+    }
+
+    [TestMethod]
+    public async Task OversizedRecordHeaderFailsWithoutReadingPastEndOfStream()
+    {
+        string inputPath = Path.Combine(testDirectory, "OversizedHeader.xlsb");
+        string outputDirectory = Path.Combine(testDirectory, "output");
+
+        // A FormulaNumber header that declares a 200,000,000-byte payload followed by 4 bytes.
+        byte[] oversized = [FormulaNumber, 0x80, 0x84, 0xAF, 0x5F, 0x00, 0x00, 0x00, 0x00];
+        CreateWorkbook(inputPath, false, new BinarySheet("Data", [], RawSheet: oversized));
+
+        FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath, outputDirectory: outputDirectory);
+
+        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
 
