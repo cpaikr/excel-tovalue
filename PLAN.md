@@ -51,8 +51,9 @@ files, without modifying source workbooks or overwriting earlier outputs.
   data-table, and table calculated/totals formulas reopened in Excel with
   identical values and no remaining formulas in scope.
 - Direct and transitive dependency vulnerability audit: clean.
-- GUI single-file and portable CLI release bundles: published and checksum
-  verified.
+- GUI single-file and portable CLI release bundles: `2.1.0` (adds `.xlsb`)
+  published and checksum verified; the released CLI converted Excel-saved
+  `.xlsb` samples.
 
 ## Open questions
 
