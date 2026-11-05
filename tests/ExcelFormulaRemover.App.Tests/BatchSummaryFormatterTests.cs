@@ -116,7 +116,7 @@ public sealed class BatchSummaryFormatterTests
     }
 
     [TestMethod]
-    [DataRow(FormulaRemovalFailureKind.InvalidInput, "파일 경로와 .xlsx/.xlsm 확장자")]
+    [DataRow(FormulaRemovalFailureKind.InvalidInput, "파일 경로와 .xlsx/.xlsm/.xlsb 확장자")]
     [DataRow(FormulaRemovalFailureKind.MissingCachedValue, "수식을 다시 계산")]
     [DataRow(FormulaRemovalFailureKind.FormulaRangeCrossesBoundary, "시작 행을 1로")]
     [DataRow(FormulaRemovalFailureKind.InvalidWorkbook, "Excel에서 정상적으로 열리는지")]

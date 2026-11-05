@@ -383,7 +383,7 @@ public sealed class FormulaRemovalEngineTests
     }
 
     [TestMethod]
-    public async Task RemovesTotalsRowFunctionWhenTotalsRowIsInScope()
+    public async Task PreservesTotalsRowFunctionWhenTotalsRowIsInScope()
     {
         string inputPath = Path.Combine(testDirectory, "TotalsTable.xlsx");
         CreateWorkbook(
@@ -409,10 +409,45 @@ public sealed class FormulaRemovalEngineTests
         FormulaRemovalFileResult result = batch.Files.Single();
         Assert.IsTrue(result.Succeeded, result.ErrorMessage);
         Assert.AreEqual(1, result.RemovedFormulaCount);
-        Assert.AreEqual(1, result.RemovedTableFormulaDefinitionCount);
+        Assert.AreEqual(0, result.RemovedTableFormulaDefinitionCount);
         Assert.IsNotNull(result.OutputPath);
-        Assert.IsNull(ReadTotalsRowFunction(result.OutputPath));
+        Assert.AreEqual(TotalsRowFunctionValues.Sum, ReadTotalsRowFunction(result.OutputPath));
         Assert.AreEqual("ROW()", ReadTableFormula(result.OutputPath));
+        Assert.IsNull(ReadCell(result.OutputPath, "Data", "A3").Formula);
+    }
+
+    [TestMethod]
+    public async Task RemovesCustomTotalsRowFormulaButKeepsItsFunction()
+    {
+        string inputPath = Path.Combine(testDirectory, "CustomTotals.xlsx");
+        CreateWorkbook(
+            inputPath,
+            false,
+            new SheetSpec(
+                "Data",
+                new CellSpec("A1", null, "Header", CellValues.String),
+                new CellSpec("A2", "ROW()", "2"),
+                new CellSpec("A3", "SUM(A2:A2)*2", "4")));
+        AddCalculatedTable(
+            inputPath,
+            "A1:A3",
+            totalsRowCount: 1,
+            totalsRowFunction: TotalsRowFunctionValues.Custom,
+            totalsRowFormula: "SUM(DataTable[Value])*2");
+
+        FormulaRemovalBatchResult batch = await FormulaRemovalEngine.ConvertAsync(
+            new FormulaRemovalRequest([inputPath], Path.Combine(testDirectory, "output")));
+
+        FormulaRemovalFileResult result = batch.Files.Single();
+        Assert.IsTrue(result.Succeeded, result.ErrorMessage);
+        Assert.AreEqual(2, result.RemovedTableFormulaDefinitionCount);
+        Assert.IsNotNull(result.OutputPath);
+        Assert.AreEqual(TotalsRowFunctionValues.Custom, ReadTotalsRowFunction(result.OutputPath));
+        Assert.IsNull(ReadTableFormula(result.OutputPath));
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(result.OutputPath, false);
+        TableColumn column = document.WorkbookPart!.WorksheetParts.Single().TableDefinitionParts.Single()
+            .Table!.Descendants<TableColumn>().Single();
+        Assert.IsNull(column.TotalsRowFormula);
     }
 
     [TestMethod]
@@ -788,7 +823,8 @@ public sealed class FormulaRemovalEngineTests
         string reference = "A1:A2",
         uint totalsRowCount = 0,
         TotalsRowFunctionValues? totalsRowFunction = null,
-        bool? totalsRowShown = null)
+        bool? totalsRowShown = null,
+        string? totalsRowFormula = null)
     {
         using SpreadsheetDocument document = SpreadsheetDocument.Open(workbookPath, true);
         WorkbookPart workbookPart = document.WorkbookPart!;
@@ -800,6 +836,7 @@ public sealed class FormulaRemovalEngineTests
             Name = "Value",
             CalculatedColumnFormula = new CalculatedColumnFormula("ROW()"),
             TotalsRowFunction = totalsRowFunction,
+            TotalsRowFormula = totalsRowFormula is null ? null : new TotalsRowFormula(totalsRowFormula),
         };
         TableColumns columns = new(column) { Count = 1U };
         tablePart.Table = new Table(

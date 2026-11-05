@@ -21,7 +21,7 @@ public static class FormulaRemovalEngine
 {
     private const long MaximumCharactersInPart = 1_073_741_824;
     private const int CopyBufferSize = 1024 * 1024;
-    private static readonly string[] SupportedExtensions = [".xlsx", ".xlsm"];
+    private static readonly string[] SupportedExtensions = [".xlsx", ".xlsm", ".xlsb"];
     private static readonly StringComparer PathComparer =
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
             ? StringComparer.OrdinalIgnoreCase
@@ -144,16 +144,33 @@ public static class FormulaRemovalEngine
             temporaryPath = CreateTemporaryPath(outputPath);
 
             CopyWithCancellation(inputPath, temporaryPath, cancellationToken);
-            ConversionStatistics statistics = TransformWorkbook(
-                temporaryPath,
-                requestedInputPath,
-                request,
-                completedFiles,
-                progress,
-                cancellationToken);
+            bool isBinaryWorkbook = IsBinaryWorkbookPath(inputPath);
+            ConversionStatistics statistics = isBinaryWorkbook
+                ? XlsbFormulaRemover.Transform(
+                    temporaryPath,
+                    requestedInputPath,
+                    request,
+                    completedFiles,
+                    progress,
+                    cancellationToken)
+                : TransformWorkbook(
+                    temporaryPath,
+                    requestedInputPath,
+                    request,
+                    completedFiles,
+                    progress,
+                    cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
-            VerifyPackageCanReopen(temporaryPath);
+            if (isBinaryWorkbook)
+            {
+                XlsbFormulaRemover.Verify(temporaryPath, cancellationToken);
+            }
+            else
+            {
+                VerifyPackageCanReopen(temporaryPath);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
 
             outputPath = PublishWithUniqueName(
@@ -204,7 +221,7 @@ public static class FormulaRemovalEngine
         }
         catch (Exception exception) when (
             exception is FileFormatException or InvalidDataException or OpenXmlPackageException or
-                XmlException or FormatException or InvalidOperationException)
+                XmlException or FormatException or InvalidOperationException or OverflowException)
         {
             return Failure(
                 requestedInputPath,
@@ -285,7 +302,7 @@ public static class FormulaRemovalEngine
 
             string sheetName = sheet.Name?.Value ??
                 throw new InvalidDataException("A worksheet has no name.");
-            if (IsExcluded(sheetName, request.ExcludedSheetNamePatterns))
+            if (FormulaScope.IsExcluded(sheetName, request.ExcludedSheetNamePatterns))
             {
                 excludedSheets++;
                 continue;
@@ -550,7 +567,7 @@ public static class FormulaRemovalEngine
             foreach (TableColumn column in table.Descendants<TableColumn>())
             {
                 if (column.CalculatedColumnFormula is not null &&
-                    FormulaRangeIsInScope(
+                    FormulaScope.RangeIsInScope(
                         "table calculated-column formula",
                         sheetName,
                         tableName,
@@ -563,33 +580,22 @@ public static class FormulaRemovalEngine
                     removedFromTable++;
                 }
 
-                bool hasTotalsFormula = column.TotalsRowFormula is not null;
-                bool hasTotalsFunction = column.TotalsRowFunction?.Value is { } totalsFunction &&
-                    totalsFunction != TotalsRowFunctionValues.None;
-                bool totalsAreInScope = false;
-                if (hasTotalsFormula || hasTotalsFunction)
-                {
-                    totalsAreInScope = totalsRowCount == 0
+                // The totals-row function is kept: Excel refuses to open a table whose
+                // totals cell holds a value while its column has no totals function.
+                // A function without a custom formula shows the stored cell value.
+                if (column.TotalsRowFormula is not null &&
+                    (totalsRowCount == 0
                         ? startRow == 1
-                        : FormulaRangeIsInScope(
+                        : FormulaScope.RangeIsInScope(
                             "table totals-row formula",
                             sheetName,
                             tableName,
                             tableReference,
                             lastRow - totalsRowCount + 1,
                             lastRow,
-                            startRow);
-                }
-
-                if (column.TotalsRowFormula is not null && totalsAreInScope)
+                            startRow)))
                 {
                     column.TotalsRowFormula.Remove();
-                    removedFromTable++;
-                }
-
-                if (hasTotalsFunction && totalsAreInScope)
-                {
-                    column.TotalsRowFunction = null;
                     removedFromTable++;
                 }
             }
@@ -602,33 +608,6 @@ public static class FormulaRemovalEngine
         }
 
         return removed;
-    }
-
-    private static bool FormulaRangeIsInScope(
-        string formulaKind,
-        string sheetName,
-        string owner,
-        string reference,
-        int firstRow,
-        int lastRow,
-        int startRow)
-    {
-        if (lastRow < startRow)
-        {
-            return false;
-        }
-
-        if (firstRow >= startRow)
-        {
-            return true;
-        }
-
-        throw new FormulaRangeBoundaryException(
-            formulaKind,
-            sheetName,
-            owner,
-            reference,
-            startRow);
     }
 
     private static (string FirstCell, string LastCell, int FirstRow, int LastRow) ParseRange(
@@ -690,19 +669,13 @@ public static class FormulaRemovalEngine
         throw new InvalidDataException("A worksheet cell has no usable row reference.");
     }
 
-    private static bool IsExcluded(string sheetName, IReadOnlyList<string> patterns)
-    {
-        return patterns.Any(pattern =>
-            sheetName.Contains(pattern, StringComparison.OrdinalIgnoreCase));
-    }
-
     private static void ValidateInput(string inputPath)
     {
         string extension = Path.GetExtension(inputPath);
         if (!SupportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
-                $"Unsupported workbook extension '{extension}'. Use .xlsx or .xlsm.",
+                $"Unsupported workbook extension '{extension}'. Use .xlsx, .xlsm, or .xlsb.",
                 nameof(inputPath));
         }
 
@@ -710,6 +683,11 @@ public static class FormulaRemovalEngine
         {
             throw new FileNotFoundException("The input workbook does not exist.", inputPath);
         }
+    }
+
+    private static bool IsBinaryWorkbookPath(string inputPath)
+    {
+        return Path.GetExtension(inputPath).Equals(".xlsb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static HashSet<string> GetNormalizedInputPaths(IReadOnlyList<string> requestedPaths)
@@ -888,22 +866,4 @@ public static class FormulaRemovalEngine
         : Exception(
             $"Worksheet '{sheetName}', cell '{cellReference}' has a formula but no cached value. " +
             "Open and recalculate the workbook in Excel, save it, and try again.");
-
-    private sealed class FormulaRangeBoundaryException(
-        string formulaKind,
-        string sheetName,
-        string owner,
-        string formulaRange,
-        int startRow)
-        : Exception(
-            $"Worksheet '{sheetName}', '{owner}' owns a {formulaKind} over range '{formulaRange}', " +
-            $"which crosses start row {startRow}. Choose row 1 or a row " +
-            "after the formula range.");
-
-    private sealed record ConversionStatistics(
-        int RemovedFormulaCount,
-        int ProcessedSheetCount,
-        int ExcludedSheetCount,
-        int RemovedTableFormulaDefinitionCount,
-        IReadOnlyList<string> Warnings);
 }

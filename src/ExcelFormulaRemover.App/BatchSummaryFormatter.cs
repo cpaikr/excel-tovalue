@@ -219,7 +219,7 @@ internal static class BatchSummaryFormatter
         failureKind switch
         {
             FormulaRemovalFailureKind.InvalidInput =>
-                "파일 경로와 .xlsx/.xlsm 확장자를 확인한 뒤 다시 추가하세요.",
+                "파일 경로와 .xlsx/.xlsm/.xlsb 확장자를 확인한 뒤 다시 추가하세요.",
             FormulaRemovalFailureKind.MissingCachedValue =>
                 "Excel에서 수식을 다시 계산하고 저장한 뒤 다시 시도하세요.",
             FormulaRemovalFailureKind.FormulaRangeCrossesBoundary =>

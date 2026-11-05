@@ -128,7 +128,8 @@ internal sealed class InputWorkbookSet
 
         string extension = Path.GetExtension(normalizedPath);
         return extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase);
+            extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".xlsb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryNormalizePath(string? path, out string normalizedPath)

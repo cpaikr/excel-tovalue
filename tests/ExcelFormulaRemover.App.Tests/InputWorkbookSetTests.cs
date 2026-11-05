@@ -72,6 +72,18 @@ public sealed class InputWorkbookSetTests
     }
 
     [TestMethod]
+    public void AcceptsBinaryWorkbooks()
+    {
+        string binary = CreateFile("Binary.XLSB");
+        InputWorkbookSet workbooks = new();
+
+        InputAdditionResult result = workbooks.Add([binary]);
+
+        Assert.AreEqual(1, result.AddedCount);
+        CollectionAssert.AreEqual(new[] { Path.GetFullPath(binary) }, workbooks.Items.ToArray());
+    }
+
+    [TestMethod]
     public void SnapshotDoesNotChangeAfterRemoveAddOrClear()
     {
         string first = CreateFile("First.xlsx");

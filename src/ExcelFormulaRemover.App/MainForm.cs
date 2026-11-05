@@ -174,7 +174,7 @@ internal sealed class MainForm : Form
             AutoSize = true,
             Dock = DockStyle.Fill,
             Margin = new Padding(3, 0, 0, 8),
-            Text = ".xlsx 또는 .xlsm 파일을 선택하거나 아래 목록으로 끌어 놓으세요.",
+            Text = ".xlsx, .xlsm 또는 .xlsb 파일을 선택하거나 아래 목록으로 끌어 놓으세요.",
             UseMnemonic = false,
         };
 
@@ -411,7 +411,7 @@ internal sealed class MainForm : Form
         using OpenFileDialog dialog = new()
         {
             CheckFileExists = true,
-            Filter = "Excel 통합 문서 (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
+            Filter = "Excel 통합 문서 (*.xlsx;*.xlsm;*.xlsb)|*.xlsx;*.xlsm;*.xlsb",
             Multiselect = true,
             RestoreDirectory = true,
             Title = "변환할 Excel 파일 선택",
@@ -837,7 +837,8 @@ internal sealed class MainForm : Form
         string extension = Path.GetExtension(path);
         return File.Exists(path) &&
             (extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
-                extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase));
+                extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".xlsb", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string LimitText(string text, int maximumLength)
