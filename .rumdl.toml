@@ -1,0 +1,4 @@
+# Agent skill folders are installed and updated by sjskills, not authored
+# here; linting or formatting them would rewrite vendored content.
+[global]
+exclude = [".agents", ".claude", ".sjskills"]
