@@ -8,10 +8,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$semanticVersionPattern = '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$'
+$semanticVersionPattern = '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
 
 if ($Version.Length -gt 128 -or $Version -cnotmatch $semanticVersionPattern) {
-    throw "Version '$Version' is not a valid semantic version (for example, 1.2.3 or 1.2.3-rc.1)."
+    throw "Version '$Version' is not a valid semantic version (for example, 1.2.3 or 1.2.3-rc.1). Build metadata is not accepted because the executable reports its version without it."
 }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -62,50 +62,96 @@ New-Item -ItemType Directory -Path $publishRoot -Force | Out-Null
 
 $stagingDirectory = Join-Path $publishRoot ".staging-$([Guid]::NewGuid().ToString('N'))"
 $guiOutput = Join-Path $stagingDirectory 'gui'
-$cliOutput = Join-Path $stagingDirectory 'cli'
 $bundleDirectory = Join-Path $stagingDirectory 'release'
-$ridLockPath = Join-Path $stagingDirectory 'rid-restore/packages.lock.json'
+$installDirectory = Join-Path $repositoryRoot 'scripts/install'
 
-New-Item -ItemType Directory -Path $guiOutput, $cliOutput, $bundleDirectory | Out-Null
+# The CLI targets this release claims. Each is certified by test-artifact.ps1
+# on its own operating system before the release is published.
+$cliTargets = @(
+    @{ Runtime = 'win-x64'; Executable = 'excel-formula-remover.exe'; Extension = 'zip' }
+    @{ Runtime = 'linux-x64'; Executable = 'excel-formula-remover'; Extension = 'tar.gz' }
+)
+
+New-Item -ItemType Directory -Path $guiOutput, $bundleDirectory | Out-Null
+
+# A runtime-specific publish needs a RID-specific assets graph. Point NuGet at
+# an unused staging lock path so the restore cannot rewrite the repository's
+# neutral locks, which check.ps1 verifies independently.
+function Restore-ForRuntime {
+    param(
+        [Parameter(Mandatory)] [string] $Project,
+        [Parameter(Mandatory)] [string] $Runtime
+    )
+
+    $lockPath = Join-Path $stagingDirectory "rid-restore/$Runtime/$([Guid]::NewGuid().ToString('N'))/packages.lock.json"
+    Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
+        'restore',
+        $Project,
+        '--runtime',
+        $Runtime,
+        '-p:RestoreLockedMode=false',
+        '-p:RestorePackagesWithLockFile=false',
+        "-p:NuGetLockFilePath=$lockPath"
+    )
+}
 
 Push-Location $repositoryRoot
 try {
-    Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
-        'restore',
-        $cliProject,
-        '--locked-mode'
-    )
+    $archives = @()
 
-    Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
-        'publish',
-        $cliProject,
-        '--configuration',
-        'Release',
-        '--self-contained',
-        'false',
-        '--no-restore',
-        '--output',
-        $cliOutput,
-        '-p:UseAppHost=false',
-        '-p:DebugSymbols=false',
-        '-p:DebugType=None',
-        '-p:ContinuousIntegrationBuild=true',
-        "-p:Version=$Version",
-        "-p:InformationalVersion=$Version"
-    )
+    foreach ($target in $cliTargets) {
+        $runtime = $target.Runtime
+        $cliOutput = Join-Path $stagingDirectory "cli-$runtime"
+        Restore-ForRuntime -Project $cliProject -Runtime $runtime
 
-    # A self-contained Windows publish needs a RID-specific assets graph. Point
-    # NuGet at an unused staging lock path so this restore cannot rewrite the
-    # repository's neutral locks, which check.ps1 verifies independently.
-    Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
-        'restore',
-        $guiProject,
-        '--runtime',
-        'win-x64',
-        '-p:RestoreLockedMode=false',
-        '-p:RestorePackagesWithLockFile=false',
-        "-p:NuGetLockFilePath=$ridLockPath"
-    )
+        # Untrimmed on purpose: the OpenXML SDK relies on reflection that
+        # trimming and Native AOT do not preserve.
+        Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
+            'publish',
+            $cliProject,
+            '--configuration',
+            'Release',
+            '--runtime',
+            $runtime,
+            '--self-contained',
+            'true',
+            '--no-restore',
+            '--output',
+            $cliOutput,
+            '-p:PublishSingleFile=true',
+            '-p:PublishTrimmed=false',
+            '-p:EnableCompressionInSingleFile=true',
+            '-p:IncludeNativeLibrariesForSelfExtract=true',
+            '-p:DebugSymbols=false',
+            '-p:DebugType=None',
+            '-p:ContinuousIntegrationBuild=true',
+            "-p:Version=$Version",
+            "-p:InformationalVersion=$Version"
+        )
+
+        # The installers accept an archive holding exactly the executable.
+        $published = @(Get-ChildItem -LiteralPath $cliOutput -Force)
+        if ($published.Count -ne 1 -or $published[0].Name -cne $target.Executable) {
+            throw "The $runtime CLI publish produced '$($published.Name -join ', ')' instead of only '$($target.Executable)'."
+        }
+
+        $archive = Join-Path $bundleDirectory "excel-formula-remover-cli-$Version-$runtime.$($target.Extension)"
+        if ($target.Extension -eq 'zip') {
+            Compress-Archive -LiteralPath $published[0].FullName -DestinationPath $archive -CompressionLevel Optimal
+        }
+        else {
+            # Use the Windows-provided tar: another tar earlier in PATH, such
+            # as Git's, can misread drive-letter paths.
+            $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+            Invoke-NativeCommand -FilePath $tar -ArgumentList @(
+                '-czf', $archive, '-C', $cliOutput, $target.Executable
+            )
+        }
+
+        $archives += $archive
+    }
+
+    Restore-ForRuntime -Project $guiProject -Runtime 'win-x64'
 
     Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
         'publish',
@@ -133,19 +179,11 @@ try {
         throw 'The GUI publish completed without producing files.'
     }
 
-    if (-not (Get-ChildItem -LiteralPath $cliOutput -File)) {
-        throw 'The CLI publish completed without producing files.'
-    }
-
-    $guiArchiveName = "excel-formula-remover-gui-$Version-win-x64.zip"
-    $cliArchiveName = "excel-formula-remover-cli-$Version-portable.zip"
-    $guiArchive = Join-Path $bundleDirectory $guiArchiveName
-    $cliArchive = Join-Path $bundleDirectory $cliArchiveName
-
+    $guiArchive = Join-Path $bundleDirectory "excel-formula-remover-gui-$Version-win-x64.zip"
     Compress-Archive -Path (Join-Path $guiOutput '*') -DestinationPath $guiArchive -CompressionLevel Optimal
-    Compress-Archive -Path (Join-Path $cliOutput '*') -DestinationPath $cliArchive -CompressionLevel Optimal
+    $archives += $guiArchive
 
-    $checksumLines = foreach ($archivePath in @($guiArchive, $cliArchive)) {
+    $checksumLines = foreach ($archivePath in ($archives | Sort-Object)) {
         $hash = Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
         "$($hash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($archivePath))"
     }
@@ -156,6 +194,15 @@ try {
         $checksumLines,
         [System.Text.UTF8Encoding]::new($false)
     )
+
+    # Ship the installers with the release so a consumer needs no checkout.
+    foreach ($installerName in 'install.ps1', 'install.sh', 'verify-windows-install.ps1') {
+        Copy-Item -LiteralPath (Join-Path $installDirectory $installerName) -Destination $bundleDirectory
+    }
+
+    # Certify the Windows archive before it becomes a versioned release. The
+    # Linux archive is certified by the same script on a Linux host.
+    & (Join-Path $PSScriptRoot 'test-artifact.ps1') -ReleaseDirectory $bundleDirectory -Version $Version
 
     [System.IO.Directory]::Move($bundleDirectory, $versionDirectory)
 
