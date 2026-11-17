@@ -15,7 +15,42 @@ public sealed class CliApplicationTests
 
         Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
         StringAssert.Contains(invocation.StandardOutput, "Usage:");
+        Assert.EndsWith("\n", invocation.StandardOutput);
+        Assert.DoesNotContain("\r", invocation.StandardOutput);
         Assert.AreEqual(string.Empty, invocation.StandardError);
+    }
+
+    [TestMethod]
+    public async Task BareInvocationPrintsExactlyTheRootHelp()
+    {
+        Invocation help = await Invoke(["--help"], UnexpectedConversion);
+        Invocation bare = await Invoke([], UnexpectedConversion);
+
+        Assert.AreEqual(help, bare);
+        Assert.AreEqual(CliApplication.SuccessExitCode, bare.ExitCode);
+    }
+
+    [TestMethod]
+    [DataRow(new string[] { "--version" })]
+    [DataRow(new string[] { "--unknown", "--version" })]
+    public async Task VersionPrintsNameAndReleaseIdentityWithoutConverting(string[] arguments)
+    {
+        Invocation invocation = await Invoke(arguments, UnexpectedConversion);
+
+        Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
+        Assert.AreEqual(
+            $"excel-formula-remover {CliApplication.Version}\n",
+            invocation.StandardOutput);
+        Assert.DoesNotContain("+", CliApplication.Version);
+        Assert.AreEqual(string.Empty, invocation.StandardError);
+    }
+
+    [TestMethod]
+    public async Task HelpWinsOverVersion()
+    {
+        Invocation invocation = await Invoke(["--version", "-h"], UnexpectedConversion);
+
+        StringAssert.Contains(invocation.StandardOutput, "Usage:");
     }
 
     [TestMethod]
@@ -34,13 +69,22 @@ public sealed class CliApplicationTests
     [DataRow(new string[] { "--wat" }, "Unknown option")]
     [DataRow(new string[] { "--output", "out", "--start-row", "0", "Book.xlsx" }, "Start row")]
     [DataRow(new string[] { "--output", "out", "--output", "other", "Book.xlsx" }, "more than once")]
+    [DataRow(new string[] { "--json", "--output", "out", "Book.xlsx" }, "Unknown option '--json'")]
+    [DataRow(new string[] { "--output", "bad\0directory", "Book.xlsx" }, "")]
     public async Task InvalidArgumentsReturnUsageError(string[] arguments, string expectedMessage)
     {
         Invocation invocation = await Invoke(arguments, UnexpectedConversion);
 
         Assert.AreEqual(CliApplication.UsageErrorExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, expectedMessage);
-        StringAssert.Contains(invocation.StandardOutput, "kind: usage");
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        JsonElement root = document.RootElement;
+        Assert.IsFalse(root.GetProperty("ok").GetBoolean());
+        Assert.AreEqual(0, root.GetProperty("files").GetArrayLength());
+        Assert.AreEqual(0, root.GetProperty("summary").GetProperty("total").GetInt32());
+        JsonElement error = root.GetProperty("error");
+        Assert.AreEqual("usage", error.GetProperty("kind").GetString());
+        StringAssert.Contains(error.GetProperty("message").GetString(), expectedMessage);
+        StringAssert.Contains(error.GetProperty("help").GetString(), "--help");
         Assert.AreEqual(string.Empty, invocation.StandardError);
     }
 
@@ -151,7 +195,10 @@ public sealed class CliApplicationTests
             UnexpectedConversion);
 
         Assert.AreEqual(CliApplication.UsageErrorExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, "Start row");
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        StringAssert.Contains(
+            document.RootElement.GetProperty("error").GetProperty("message").GetString(),
+            "Start row");
         Assert.AreEqual(string.Empty, invocation.StandardError);
     }
 
@@ -170,47 +217,43 @@ public sealed class CliApplicationTests
 
         Assert.AreEqual(CliApplication.ConversionFailureExitCode, invocation.ExitCode);
         Assert.AreEqual(
-            """
-            files[2]{index,input,status,output,failure}:
-              1,"First.xlsx",ok,"First_수식제거.xlsx",null
-              2,"Second.xlsx",failed,null,missing-cached-value
-            messages[1]{index,level,text}:
-              2,error,"No cache."
-            summary:
-              total: 2
-              succeeded: 1
-              failed: 1
-              canceled: false
-            """.ReplaceLineEndings("\n"),
+            "{\"ok\":false,\"version\":\"" + CliApplication.Version + "\",\"files\":[" +
+            "{\"input\":\"First.xlsx\",\"status\":\"converted\",\"output\":\"First_수식제거.xlsx\"," +
+            "\"failure\":null,\"removedFormulas\":3,\"removedTableFormulaDefinitions\":0," +
+            "\"processedSheets\":2,\"excludedSheets\":1,\"warnings\":[]}," +
+            "{\"input\":\"Second.xlsx\",\"status\":\"failed\",\"output\":null," +
+            "\"failure\":{\"kind\":\"missing-cached-value\",\"message\":\"No cache.\"}," +
+            "\"removedFormulas\":0,\"removedTableFormulaDefinitions\":0," +
+            "\"processedSheets\":0,\"excludedSheets\":0,\"warnings\":[]}]," +
+            "\"summary\":{\"total\":2,\"succeeded\":1,\"failed\":1,\"canceled\":false}," +
+            "\"error\":null}\n",
             invocation.StandardOutput);
         Assert.AreEqual(string.Empty, invocation.StandardError);
     }
 
     [TestMethod]
-    public async Task JsonOutputIsValidNdjsonWithSummaryLast()
+    [DataRow(FormulaRemovalFailureKind.InvalidInput, "invalid-input")]
+    [DataRow(FormulaRemovalFailureKind.MissingCachedValue, "missing-cached-value")]
+    [DataRow(FormulaRemovalFailureKind.FormulaRangeCrossesBoundary, "formula-range-crosses-boundary")]
+    [DataRow(FormulaRemovalFailureKind.InvalidWorkbook, "invalid-workbook")]
+    [DataRow(FormulaRemovalFailureKind.FileAccess, "file-access")]
+    [DataRow(FormulaRemovalFailureKind.Unexpected, "unexpected")]
+    public async Task FailureKindsUseStableIdentifiers(FormulaRemovalFailureKind kind, string expected)
     {
-        FormulaRemovalBatchResult result = new(
-            [SuccessfulFile("Book.xlsx", "Book_수식제거.xlsx")]);
-
         Invocation invocation = await Invoke(
-            ["--json", "--output", "out", "Book.xlsx"],
-            (_, _, _) => Task.FromResult(result));
+            ["--output", "out", "Book.xlsx"],
+            (_, _, _) => Task.FromResult(
+                new FormulaRemovalBatchResult([FailedFile("Book.xlsx", kind, "Failed.")])));
 
-        Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
-        string[] lines = invocation.StandardOutput
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.HasCount(2, lines);
-        using JsonDocument file = JsonDocument.Parse(lines[0]);
-        using JsonDocument summary = JsonDocument.Parse(lines[1]);
-        Assert.AreEqual("result", file.RootElement.GetProperty("type").GetString());
-        Assert.IsTrue(file.RootElement.GetProperty("succeeded").GetBoolean());
-        Assert.AreEqual("summary", summary.RootElement.GetProperty("type").GetString());
-        Assert.AreEqual(1, summary.RootElement.GetProperty("succeeded").GetInt32());
-        Assert.IsFalse(summary.RootElement.GetProperty("canceled").GetBoolean());
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        Assert.AreEqual(
+            expected,
+            document.RootElement.GetProperty("files")[0]
+                .GetProperty("failure").GetProperty("kind").GetString());
     }
 
     [TestMethod]
-    public async Task ToonOutputIsInvariantAndEscapesDynamicStrings()
+    public async Task SuccessfulBatchReportsOkWithCountsAndWarnings()
     {
         CultureInfo previousCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
@@ -223,10 +266,10 @@ public sealed class CliApplicationTests
                     "out,\tBook.xlsx",
                     FormulaRemovalFailureKind.None,
                     null,
-                    1,
-                    1,
-                    0,
-                    0,
+                    1234,
+                    5,
+                    6,
+                    7,
                     ["line\r\n\u0001"]),
             ]);
 
@@ -234,20 +277,23 @@ public sealed class CliApplicationTests
                 ["--output", "out", "Book.xlsx"],
                 (_, _, _) => Task.FromResult(result));
 
-            Assert.AreEqual(
-                """
-                files[1]{index,input,status,output,failure}:
-                  1,"A,\n\"\\😀한글.xlsx",ok,"out,\tBook.xlsx",null
-                messages[1]{index,level,text}:
-                  1,warning,"line\r\n\u0001"
-                summary:
-                  total: 1
-                  succeeded: 1
-                  failed: 0
-                  canceled: false
-                """.ReplaceLineEndings("\n"),
-                invocation.StandardOutput);
-            Assert.DoesNotEndWith(invocation.StandardOutput, "\n");
+            Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
+            StringAssert.Contains(invocation.StandardOutput, "한글");
+            using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+            JsonElement root = document.RootElement;
+            Assert.IsTrue(root.GetProperty("ok").GetBoolean());
+            Assert.AreEqual(CliApplication.Version, root.GetProperty("version").GetString());
+            Assert.AreEqual(JsonValueKind.Null, root.GetProperty("error").ValueKind);
+            JsonElement file = root.GetProperty("files")[0];
+            Assert.AreEqual("A,\n\"\\😀한글.xlsx", file.GetProperty("input").GetString());
+            Assert.AreEqual("out,\tBook.xlsx", file.GetProperty("output").GetString());
+            Assert.AreEqual("converted", file.GetProperty("status").GetString());
+            Assert.AreEqual(JsonValueKind.Null, file.GetProperty("failure").ValueKind);
+            Assert.AreEqual(1234, file.GetProperty("removedFormulas").GetInt32());
+            Assert.AreEqual(5, file.GetProperty("processedSheets").GetInt32());
+            Assert.AreEqual(6, file.GetProperty("excludedSheets").GetInt32());
+            Assert.AreEqual(7, file.GetProperty("removedTableFormulaDefinitions").GetInt32());
+            Assert.AreEqual("line\r\n\u0001", file.GetProperty("warnings")[0].GetString());
         }
         finally
         {
@@ -267,8 +313,11 @@ public sealed class CliApplicationTests
             cancellation.Token);
 
         Assert.AreEqual(CliApplication.CanceledExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, "files: []");
-        StringAssert.Contains(invocation.StandardOutput, "canceled: true");
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        JsonElement root = document.RootElement;
+        Assert.IsFalse(root.GetProperty("ok").GetBoolean());
+        Assert.AreEqual(0, root.GetProperty("files").GetArrayLength());
+        Assert.IsTrue(root.GetProperty("summary").GetProperty("canceled").GetBoolean());
         Assert.AreEqual(string.Empty, invocation.StandardError);
     }
 
@@ -289,28 +338,13 @@ public sealed class CliApplicationTests
             cancellation.Token);
 
         Assert.AreEqual(CliApplication.CanceledExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, "\"First.xlsx\",ok");
-        StringAssert.Contains(invocation.StandardOutput, "canceled: true");
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        JsonElement root = document.RootElement;
+        Assert.IsFalse(root.GetProperty("ok").GetBoolean());
+        Assert.AreEqual("converted", root.GetProperty("files")[0].GetProperty("status").GetString());
+        Assert.AreEqual(1, root.GetProperty("summary").GetProperty("succeeded").GetInt32());
+        Assert.IsTrue(root.GetProperty("summary").GetProperty("canceled").GetBoolean());
         Assert.AreEqual(string.Empty, invocation.StandardError);
-    }
-
-    [TestMethod]
-    public async Task JsonModeFormatsUsageErrorsAsJson()
-    {
-        foreach (string[] arguments in new[]
-        {
-            new[] { "--json", "--unknown" },
-            new[] { "--json", "--output", "bad\0directory", "Book.xlsx" },
-        })
-        {
-            Invocation invocation = await Invoke(arguments, UnexpectedConversion);
-
-            Assert.AreEqual(CliApplication.UsageErrorExitCode, invocation.ExitCode);
-            using JsonDocument document = JsonDocument.Parse(invocation.StandardOutput);
-            Assert.AreEqual("error", document.RootElement.GetProperty("type").GetString());
-            Assert.AreEqual("usage", document.RootElement.GetProperty("kind").GetString());
-            Assert.AreEqual(string.Empty, invocation.StandardError);
-        }
     }
 
     [TestMethod]
@@ -321,11 +355,23 @@ public sealed class CliApplicationTests
             (_, _, _) => throw new IOException("Disk unavailable."));
 
         Assert.AreEqual(CliApplication.ConversionFailureExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, "kind: conversion");
-        StringAssert.Contains(invocation.StandardOutput, "type: \"IOException\"");
-        StringAssert.Contains(invocation.StandardOutput, "message: \"Disk unavailable.\"");
-        Assert.DoesNotContain(invocation.StandardOutput, " at ");
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        JsonElement error = document.RootElement.GetProperty("error");
+        Assert.AreEqual("unexpected", error.GetProperty("kind").GetString());
+        Assert.AreEqual("Disk unavailable.", error.GetProperty("message").GetString());
+        Assert.DoesNotContain(" at ", invocation.StandardOutput);
+        Assert.DoesNotContain("IOException", invocation.StandardOutput);
         Assert.AreEqual(string.Empty, invocation.StandardError);
+    }
+
+    // The process contract is one JSON document followed by exactly one newline.
+    private static JsonDocument ParseSingleDocument(string standardOutput)
+    {
+        Assert.EndsWith("\n", standardOutput);
+        string body = standardOutput[..^1];
+        Assert.DoesNotContain("\n", body);
+        Assert.DoesNotContain("\r", body);
+        return JsonDocument.Parse(body);
     }
 
     private static Task<FormulaRemovalBatchResult> UnexpectedConversion(
