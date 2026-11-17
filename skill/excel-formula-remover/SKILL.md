@@ -29,7 +29,9 @@ environment change, or a failure to start.
 - **The tool never calculates.** It can only keep the value stored in the
   file. A workbook written by a library such as openpyxl, or never opened in
   Excel after its formulas changed, has no stored values and fails with
-  `missing-cached-value`. Do not work around this by inventing values.
+  `missing-cached-value`. Do not work around this by inventing values. A
+  recalculation by another engine, such as LibreOffice, can differ from
+  Excel: offer it only as a named alternative, never as the default.
 - **Stored values can be stale.** A warning about manual calculation means
   the saved values may not match the formulas. Pass that warning on; the
   conversion still succeeded, but only a recalculate-and-save in Excel makes

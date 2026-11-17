@@ -28,8 +28,10 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Ship the `skill/excel-formula-remover` consumer skill.
 - [ ] Release 3.0.0 and verify the documented installation from an
   independent terminal.
-- [ ] Evaluate the skill in fresh agent contexts, then decide on implicit
-  invocation.
+- [x] Evaluate the skill in fresh agent contexts
+  ([2026-11-17](evals/skill/evaluation-2026-11-17.md)): four cases passed.
+- [ ] Run trigger trials before considering implicit invocation, and repeat
+  the installation case against a real release.
 
 ## Product constraints
 
