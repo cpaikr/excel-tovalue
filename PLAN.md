@@ -28,6 +28,7 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Ship the `skill/excel-formula-remover` consumer skill.
 - [x] Release 3.0.0 and verify the documented installation from an
   independent process.
+- [x] Release 3.0.1 so every release archive carries the license terms.
 - [x] Evaluate the skill in fresh agent contexts
   ([2026-11-17](evals/skill/evaluation-2026-11-17.md)): four cases passed.
 - [ ] Run trigger trials before considering implicit invocation, and repeat
@@ -65,7 +66,12 @@ files, without modifying source workbooks or overwriting earlier outputs.
   login. The CLI has no update check or self-upgrade; reinstalling from a
   newer release is the upgrade path.
 - The source is licensed under the Elastic License 2.0
-  ([LICENSE.md](LICENSE.md)), the same license as `cpaikr/darty`.
+  ([LICENSE.md](LICENSE.md)), the same license as `cpaikr/darty`. From
+  3.0.1 on, every release archive holds `LICENSE.md` beside the executable;
+  the installers require it and install only the executable. Archives of
+  3.0.0 and earlier predate this and stay as published. Third-party
+  notices for the bundled .NET runtime and Open XML SDK are not yet
+  included.
 - The skill is explicit-invocation only until trigger trials justify more.
 
 ## Validation
@@ -98,6 +104,11 @@ files, without modifying source workbooks or overwriting earlier outputs.
   README commands downloaded and installed `3.0.0` under Windows PowerShell
   5.1 and under WSL Ubuntu 24.04, each into a scratch directory, and the
   installed executable reported `3.0.0`.
+- License in archives, `3.0.1` (released 2026-11-18): the release workflow
+  passed the installer and process contract tests on both runners. The
+  downloaded assets matched `SHA256SUMS.txt`, and the Windows CLI, Linux CLI,
+  and GUI archives each list the executable and a `LICENSE.md` identical to
+  the repository's. The consumer install was not repeated for `3.0.1`.
 - Not covered by a test: SIGTERM cancellation.
 
 ## Open questions
