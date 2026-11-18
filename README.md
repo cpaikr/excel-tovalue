@@ -66,31 +66,37 @@ AI 에이전트가 같은 명령과 같은 출력 계약을 사용합니다.
 ### CLI 설치
 
 **지원 환경.** Windows x64, Linux x64(glibc). 다른 플랫폼용 실행 파일은 게시하지
-않습니다. .NET 런타임이나 Excel은 필요하지 않습니다. 저장소가 비공개이므로
-릴리스를 받으려면 저장소 접근 권한으로 로그인된
-[GitHub CLI](https://cli.github.com/)(`gh auth status`)가 필요합니다.
+않습니다. .NET 런타임이나 Excel은 필요하지 않습니다. 릴리스는
+[공개 GitHub 릴리스](https://github.com/cpaikr/excel-tovalue/releases)에서
+로그인 없이 받습니다. Linux에서는 `curl`과 `tar`가 필요합니다.
 
 **Windows.** 빈 작업 폴더의 PowerShell에서 실행합니다.
 
 ```powershell
-$repo = "sjunepark/excel-tovalue"
-$tag = gh release view --repo $repo --json tagName --jq .tagName
+$repo = "cpaikr/excel-tovalue"
+$api = "https://api.github.com/repos/$repo/releases/latest"
+$tag = (Invoke-RestMethod $api -UseBasicParsing).tag_name
 $version = $tag.TrimStart("v")
+$base = "https://github.com/$repo/releases/download/$tag"
 $archive = "excel-formula-remover-cli-$version-win-x64.zip"
-gh release download $tag --repo $repo `
-  --pattern $archive --pattern SHA256SUMS.txt `
-  --pattern install.ps1 --pattern verify-windows-install.ps1
+$files = $archive, "SHA256SUMS.txt", "install.ps1", "verify-windows-install.ps1"
+foreach ($name in $files) {
+  Invoke-WebRequest "$base/$name" -OutFile $name -UseBasicParsing
+}
 .\install.ps1 -Archive ".\$archive" -Checksums ".\SHA256SUMS.txt"
 ```
 
 **Linux.**
 
 ```sh
-repo=sjunepark/excel-tovalue
-tag=$(gh release view --repo "$repo" --json tagName --jq .tagName)
+repo=cpaikr/excel-tovalue
+tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" |
+  sed -n 's/^ *"tag_name": "\(.*\)",$/\1/p')
+base="https://github.com/$repo/releases/download/$tag"
 archive="excel-formula-remover-cli-${tag#v}-linux-x64.tar.gz"
-gh release download "$tag" --repo "$repo" \
-  --pattern "$archive" --pattern SHA256SUMS.txt --pattern install.sh
+for name in "$archive" SHA256SUMS.txt install.sh; do
+  curl -fsSLO "$base/$name"
+done
 sh install.sh "$archive" SHA256SUMS.txt
 ```
 

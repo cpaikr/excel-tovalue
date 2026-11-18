@@ -60,9 +60,12 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - CLI executables are self-contained and untrimmed because the OpenXML SDK
   depends on reflection. They run in invariant-globalization mode, so Linux
   hosts need no ICU; the engine uses only ordinal and invariant operations.
-- The repository and its releases are private, so installation downloads
-  through an authenticated GitHub CLI. The CLI has no update check or
-  self-upgrade; reinstalling from a newer release is the upgrade path.
+- The repository is public at `cpaikr/excel-tovalue` (moved from a private
+  `sjunepark` repository on 2026-11-18), and releases download without a
+  login. The CLI has no update check or self-upgrade; reinstalling from a
+  newer release is the upgrade path.
+- The repository has no license file yet, so the published source and
+  binaries carry no usage grant.
 - The skill is explicit-invocation only until trigger trials justify more.
 
 ## Validation
@@ -91,6 +94,10 @@ files, without modifying source workbooks or overwriting earlier outputs.
   visible, `--version` reports `3.0.0`, and the command name resolves from
   the persisted `PATH`. The default `%LOCALAPPDATA%` destination and the
   Linux `gh` download path were not exercised outside CI.
+- Login-free install after the repository became public (2026-11-18): the
+  README commands downloaded and installed `3.0.0` under Windows PowerShell
+  5.1 and under WSL Ubuntu 24.04, each into a scratch directory, and the
+  installed executable reported `3.0.0`.
 - Not covered by a test: SIGTERM cancellation.
 
 ## Open questions

@@ -1,24 +1,17 @@
 # Install or recover the executable
 
 Read the canonical
-[installation guide](https://github.com/sjunepark/excel-tovalue/blob/main/README.md#cli-설치)
+[installation guide](https://github.com/cpaikr/excel-tovalue/blob/main/README.md#cli-설치)
 for prerequisites, platform selection, release downloads, checksum
 verification, installation, `PATH`, and upgrades. Installation facts live
-there so this package does not maintain a second installer recipe.
+there so this package does not maintain a second installer recipe. The guide
+is written in Korean; its command blocks are the procedure. Its raw text is at
+<https://raw.githubusercontent.com/cpaikr/excel-tovalue/main/README.md>.
 
-The repository and its
-[releases](https://github.com/sjunepark/excel-tovalue/releases) are private,
-so an unauthenticated fetch of the guide fails. Read it through the user's
-existing GitHub CLI login (`gh auth status`), which the downloads also need:
-
-```sh
-gh api -H "Accept: application/vnd.github.raw" \
-  repos/sjunepark/excel-tovalue/contents/README.md
-```
-
-If `gh` is missing or not authorized for the repository, report that and ask the
-user for the release files; do not build from source, and do not start a
-login flow yourself.
+The [public GitHub Releases](https://github.com/cpaikr/excel-tovalue/releases)
+channel provides the artifacts without a login. If the guide or the release
+cannot be reached, report the unavailable resource and ask the user for the
+release files; do not build from source or invent another install command.
 
 When the user has authorized installation or an update, do the work yourself
 with the guide's unattended commands. Supported targets are Windows x64 and

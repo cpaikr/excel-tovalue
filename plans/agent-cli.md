@@ -2,7 +2,9 @@
 
 Status: implemented and released as 3.0.0 on 2026-11-18. The owner chose the
 recommended option for both decisions: JSON as the only encoding, and a
-private release channel. [PLAN.md](../PLAN.md) owns current state.
+private release channel. The repository later became public under
+`cpaikr`, so the private-channel reasoning below is historical.
+[PLAN.md](../PLAN.md) owns current state.
 
 ## Goal
 
