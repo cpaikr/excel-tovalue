@@ -1,5 +1,6 @@
 namespace ExcelFormulaRemover.Cli;
 
+using System.Runtime.InteropServices;
 using System.Text;
 
 internal static class Program
@@ -21,6 +22,17 @@ internal static class Program
                 eventArgs.Cancel = false;
             }
         };
+
+        // Harnesses and `timeout` stop a process with SIGTERM rather than
+        // Ctrl+C; treat it as the same cancellation so the result for files
+        // already completed is still written.
+        using PosixSignalRegistration termination = PosixSignalRegistration.Create(
+            PosixSignal.SIGTERM,
+            context =>
+            {
+                context.Cancel = true;
+                cancellation.Cancel();
+            });
 
         Console.CancelKeyPress += cancelHandler;
         try

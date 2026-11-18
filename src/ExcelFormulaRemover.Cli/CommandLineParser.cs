@@ -6,48 +6,42 @@ using ExcelFormulaRemover.Core;
 
 internal static class CommandLineParser
 {
-    public static bool RequestsJson(IReadOnlyList<string> arguments)
-    {
-        ArgumentNullException.ThrowIfNull(arguments);
-
-        foreach (string argument in arguments)
-        {
-            if (argument == "--")
-            {
-                return false;
-            }
-
-            if (argument == "--json")
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     public static CommandLineParseResult Parse(IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
-        bool beforeTerminator = true;
+        // A bare invocation is the root help, so there is one command inventory.
+        if (arguments.Count == 0)
+        {
+            return CommandLineParseResult.Help();
+        }
+
+        // Help wins over version, and both win over malformed arguments, so
+        // discovery never depends on the rest of the command line being valid.
+        bool versionRequested = false;
         foreach (string argument in arguments)
         {
-            if (beforeTerminator && argument is "--help" or "-h")
+            if (argument == "--")
+            {
+                break;
+            }
+
+            if (argument is "--help" or "-h")
             {
                 return CommandLineParseResult.Help();
             }
 
-            if (argument == "--")
-            {
-                beforeTerminator = false;
-            }
+            versionRequested |= argument == "--version";
+        }
+
+        if (versionRequested)
+        {
+            return CommandLineParseResult.Version();
         }
 
         string? outputDirectory = null;
         int startRow = 1;
         bool startRowWasSet = false;
-        bool useJson = false;
         List<string> excludedPatterns = [];
         List<string> inputPaths = [];
         bool optionsEnded = false;
@@ -71,7 +65,6 @@ internal static class CommandLineParser
                     ref outputDirectory,
                     ref startRow,
                     ref startRowWasSet,
-                    ref useJson,
                     excludedPatterns);
                 if (failure is not null)
                 {
@@ -126,8 +119,7 @@ internal static class CommandLineParser
             inputPaths.AsReadOnly(),
             outputDirectory,
             startRow,
-            excludedPatterns.AsReadOnly(),
-            useJson));
+            excludedPatterns.AsReadOnly()));
     }
 
     private static CommandLineParseResult? ParseLongOption(
@@ -138,25 +130,8 @@ internal static class CommandLineParser
         ref string? outputDirectory,
         ref int startRow,
         ref bool startRowWasSet,
-        ref bool useJson,
         List<string> excludedPatterns)
     {
-        if (option == "--json")
-        {
-            if (inlineValue is not null)
-            {
-                return CommandLineParseResult.Failure("Option '--json' does not accept a value.");
-            }
-
-            if (useJson)
-            {
-                return CommandLineParseResult.Failure("Option '--json' was provided more than once.");
-            }
-
-            useJson = true;
-            return null;
-        }
-
         if (option is not ("--output" or "--start-row" or "--exclude"))
         {
             return CommandLineParseResult.Failure($"Unknown option '{option}'.");
@@ -270,13 +245,13 @@ internal sealed record CommandLineOptions(
     IReadOnlyList<string> InputPaths,
     string OutputDirectory,
     int StartRow,
-    IReadOnlyList<string> ExcludedSheetNamePatterns,
-    bool UseJson);
+    IReadOnlyList<string> ExcludedSheetNamePatterns);
 
 internal enum CommandLineParseKind
 {
     Success,
     Help,
+    Version,
     Failure,
 }
 
@@ -290,6 +265,9 @@ internal sealed record CommandLineParseResult(
 
     public static CommandLineParseResult Help() =>
         new(CommandLineParseKind.Help, null, null);
+
+    public static CommandLineParseResult Version() =>
+        new(CommandLineParseKind.Version, null, null);
 
     public static CommandLineParseResult Failure(string message) =>
         new(CommandLineParseKind.Failure, null, message);

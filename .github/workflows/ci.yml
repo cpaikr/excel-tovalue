@@ -1,8 +1,17 @@
 name: CI
 
 on:
+  # Tag pushes are verified by release.yml, which calls this workflow.
   push:
+    branches: ['**']
   pull_request:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version to build instead of a throwaway CI version.
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -13,6 +22,7 @@ concurrency:
 
 env:
   CI: 'true'
+  RELEASE_VERSION: ${{ inputs.version || format('0.0.0-ci.{0}.{1}', github.run_id, github.run_attempt) }}
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
   DOTNET_NOLOGO: 'true'
   NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
@@ -50,17 +60,17 @@ jobs:
           path: artifacts/test-results
           if-no-files-found: warn
 
-      - name: Publish smoke-test artifacts
+      # Also installs the Windows CLI archive and runs the process contract
+      # tests against the installed executable.
+      - name: Publish and certify release artifacts
         shell: pwsh
-        run: >-
-          pwsh -NoProfile -File scripts/publish.ps1
-          -Version "0.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}"
+        run: pwsh -NoProfile -File scripts/publish.ps1 -Version $env:RELEASE_VERSION
 
-      - name: Upload publish smoke test
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-publish-smoke
-          path: artifacts/publish/0.0.0-ci.${{ github.run_id }}.${{ github.run_attempt }}
+          name: release-artifacts
+          path: artifacts/publish/${{ env.RELEASE_VERSION }}
           if-no-files-found: error
 
   portable:
@@ -101,3 +111,30 @@ jobs:
           name: portable-test-results
           path: artifacts/test-results/portable
           if-no-files-found: warn
+
+  linux-artifact:
+    name: Linux CLI artifact
+    needs: windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up current .NET servicing SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts/release
+
+      - name: Install and certify the Linux CLI archive
+        shell: pwsh
+        run: ./scripts/test-artifact.ps1 -ReleaseDirectory artifacts/release -Version $env:RELEASE_VERSION

@@ -100,6 +100,58 @@ function Invoke-VulnerabilityAudit {
     }
 }
 
+# A consumer copies one skill directory out of the repository, so every
+# resource it links must live inside that directory.
+function Test-SkillPackages {
+    $skillRoot = Join-Path $repositoryRoot 'skill'
+    $problems = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($package in Get-ChildItem -LiteralPath $skillRoot -Directory) {
+        $entryPoint = Join-Path $package.FullName 'SKILL.md'
+        if (-not (Test-Path -LiteralPath $entryPoint -PathType Leaf)) {
+            $problems.Add("$($package.Name): SKILL.md is missing.")
+            continue
+        }
+
+        $entryText = Get-Content -LiteralPath $entryPoint -Raw
+        $frontmatter = [regex]::Match($entryText, '\A---\r?\n(?<body>.*?)\r?\n---\r?\n', 'Singleline')
+        $name = [regex]::Match($frontmatter.Groups['body'].Value, '(?m)^name:\s*(?<value>\S+)\s*$')
+        if (-not $frontmatter.Success -or $name.Groups['value'].Value -cne $package.Name) {
+            $problems.Add("$($package.Name): frontmatter 'name' must equal the directory name.")
+        }
+
+        if ($frontmatter.Groups['body'].Value -notmatch '(?m)^description:\s*\S') {
+            $problems.Add("$($package.Name): frontmatter 'description' is missing.")
+        }
+
+        $packagePrefix = $package.FullName + [System.IO.Path]::DirectorySeparatorChar
+        foreach ($document in Get-ChildItem -LiteralPath $package.FullName -Recurse -File -Filter '*.md') {
+            $documentText = Get-Content -LiteralPath $document.FullName -Raw
+            foreach ($link in [regex]::Matches($documentText, '\]\((?<target>[^)\s]+)\)')) {
+                $target = $link.Groups['target'].Value
+                if ($target -match '^(https?:|mailto:|#)') {
+                    continue
+                }
+
+                $relativePath = ($target -split '#', 2)[0]
+                $resolved = [System.IO.Path]::GetFullPath((Join-Path $document.DirectoryName $relativePath))
+                if (-not $resolved.StartsWith($packagePrefix, [StringComparison]::Ordinal)) {
+                    $problems.Add("$($document.Name): link '$target' leaves the skill package.")
+                }
+                elseif (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+                    $problems.Add("$($document.Name): link '$target' does not resolve.")
+                }
+            }
+        }
+    }
+
+    if ($problems.Count -gt 0) {
+        throw "Skill package check failed:`n  $($problems -join "`n  ")"
+    }
+
+    Write-Host 'Skill packages are self-contained.'
+}
+
 Push-Location $repositoryRoot
 try {
     Invoke-NativeCommand -FilePath 'dotnet' -ArgumentList @(
@@ -150,6 +202,8 @@ try {
         '--respect-gitignore=true',
         $repositoryRoot
     )
+
+    Test-SkillPackages
 
     Write-Host 'Repository checks completed successfully.'
 }

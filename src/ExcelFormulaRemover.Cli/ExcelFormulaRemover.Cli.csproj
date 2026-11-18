@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>excel-formula-remover</AssemblyName>
     <Description>Automatable command-line interface for Excel formula removal.</Description>
+    <!-- The engine uses only ordinal and invariant operations, so the standalone
+         executable does not need ICU, which minimal Linux hosts often lack. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
