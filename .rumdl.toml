@@ -1,4 +1,5 @@
 # Agent skill folders are installed and updated by sjskills, not authored
-# here; linting or formatting them would rewrite vendored content.
+# here; linting or formatting them would rewrite vendored content. LICENSE.md is
+# the Elastic License 2.0 text, kept verbatim.
 [global]
-exclude = [".agents", ".claude", ".sjskills"]
+exclude = [".agents", ".claude", ".sjskills", "LICENSE.md"]
