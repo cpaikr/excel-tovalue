@@ -32,8 +32,10 @@ expected=$(tr -d '\r' <"$checksums" | awk -v name="$archive_name" '$2 == name { 
 [ "${#expected}" -eq 64 ] || fail "Missing or duplicate checksum for $archive_name."
 case "$expected" in *[!0-9a-f]*) fail "Invalid SHA-256 checksum." ;; esac
 [ "$(sha256 "$archive")" = "$expected" ] || fail "Archive checksum mismatch; the existing installation was not changed."
-# Only the one tool-owned regular file may be extracted.
-[ "$(tar -tzf "$archive")" = "excel-formula-remover" ] || fail "Unexpected archive contents."
+# Only the executable and its license terms, as regular files, may be
+# extracted. Only the executable is installed.
+[ "$(tar -tzf "$archive")" = "excel-formula-remover
+LICENSE.md" ] || fail "Unexpected archive contents."
 [ "$(tar -tvzf "$archive" | cut -c1 | sort -u)" = '-' ] || fail "Archive must contain only regular files."
 mkdir -p "$bin_dir"
 bin_dir=$(CDPATH='' cd -- "$bin_dir" && pwd -P)

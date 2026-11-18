@@ -64,6 +64,7 @@ $stagingDirectory = Join-Path $publishRoot ".staging-$([Guid]::NewGuid().ToStrin
 $guiOutput = Join-Path $stagingDirectory 'gui'
 $bundleDirectory = Join-Path $stagingDirectory 'release'
 $installDirectory = Join-Path $repositoryRoot 'scripts/install'
+$licensePath = Join-Path $repositoryRoot 'LICENSE.md'
 
 # The CLI targets this release claims. Each is certified by test-artifact.ps1
 # on its own operating system before the release is published.
@@ -129,22 +130,26 @@ try {
             "-p:InformationalVersion=$Version"
         )
 
-        # The installers accept an archive holding exactly the executable.
         $published = @(Get-ChildItem -LiteralPath $cliOutput -Force)
         if ($published.Count -ne 1 -or $published[0].Name -cne $target.Executable) {
             throw "The $runtime CLI publish produced '$($published.Name -join ', ')' instead of only '$($target.Executable)'."
         }
 
+        # The license requires every copy of the software to come with its
+        # terms. The installers accept an archive holding exactly the
+        # executable and the license, in this order.
+        Copy-Item -LiteralPath $licensePath -Destination $cliOutput
         $archive = Join-Path $bundleDirectory "excel-formula-remover-cli-$Version-$runtime.$($target.Extension)"
         if ($target.Extension -eq 'zip') {
-            Compress-Archive -LiteralPath $published[0].FullName -DestinationPath $archive -CompressionLevel Optimal
+            Compress-Archive -LiteralPath $published[0].FullName, (Join-Path $cliOutput 'LICENSE.md') `
+                -DestinationPath $archive -CompressionLevel Optimal
         }
         else {
             # Use the Windows-provided tar: another tar earlier in PATH, such
             # as Git's, can misread drive-letter paths.
             $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
             Invoke-NativeCommand -FilePath $tar -ArgumentList @(
-                '-czf', $archive, '-C', $cliOutput, $target.Executable
+                '-czf', $archive, '-C', $cliOutput, $target.Executable, 'LICENSE.md'
             )
         }
 
@@ -179,6 +184,7 @@ try {
         throw 'The GUI publish completed without producing files.'
     }
 
+    Copy-Item -LiteralPath $licensePath -Destination $guiOutput
     $guiArchive = Join-Path $bundleDirectory "excel-formula-remover-gui-$Version-win-x64.zip"
     Compress-Archive -Path (Join-Path $guiOutput '*') -DestinationPath $guiArchive -CompressionLevel Optimal
     $archives += $guiArchive
