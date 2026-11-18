@@ -1,8 +1,8 @@
 # Agent-facing CLI and consumer skill
 
-Status: implemented and released as 3.0.0 on 2026-11-18. The owner chose the recommended option for both decisions: JSON as the only
-encoding, and a private release channel. [PLAN.md](../PLAN.md) owns current
-state.
+Status: implemented and released as 3.0.0 on 2026-11-18. The owner chose the
+recommended option for both decisions: JSON as the only encoding, and a
+private release channel. [PLAN.md](../PLAN.md) owns current state.
 
 ## Goal
 
