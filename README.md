@@ -306,9 +306,9 @@ pwsh -NoProfile -File ./scripts/test-artifact.ps1 artifacts/publish/1.0.0 1.0.0
 - `excel-formula-remover-gui-<version>-win-x64.zip`: Windows x64용 자체 포함,
   단일 파일 GUI
 - `excel-formula-remover-cli-<version>-win-x64.zip`: Windows x64용 자체 포함,
-  단일 파일 CLI(`excel-formula-remover.exe` 하나)
+  단일 파일 CLI(`excel-formula-remover.exe`와 `LICENSE.md`)
 - `excel-formula-remover-cli-<version>-linux-x64.tar.gz`: Linux x64(glibc)용
-  자체 포함, 단일 파일 CLI(`excel-formula-remover` 하나)
+  자체 포함, 단일 파일 CLI(`excel-formula-remover`와 `LICENSE.md`)
 - `SHA256SUMS.txt`: 세 압축 파일의 SHA-256 체크섬
 - `install.ps1`, `install.sh`, `verify-windows-install.ps1`: CLI 설치와 설치
   확인 스크립트
