@@ -347,3 +347,7 @@ plans/agent-cli.md                에이전트용 CLI와 스킬 설계 기록
 실행 파일은 Windows x64와 Linux x64용입니다.
 `App`만 `net10.0-windows`와 WinForms에 의존하므로 GUI 실행은
 Windows 전용입니다.
+
+## 라이선스
+
+Elastic License 2.0. [LICENSE.md](LICENSE.md)를 참고하세요.

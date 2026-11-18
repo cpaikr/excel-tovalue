@@ -64,8 +64,8 @@ files, without modifying source workbooks or overwriting earlier outputs.
   `sjunepark` repository on 2026-11-18), and releases download without a
   login. The CLI has no update check or self-upgrade; reinstalling from a
   newer release is the upgrade path.
-- The repository has no license file yet, so the published source and
-  binaries carry no usage grant.
+- The source is licensed under the Elastic License 2.0
+  ([LICENSE.md](LICENSE.md)), the same license as `cpaikr/darty`.
 - The skill is explicit-invocation only until trigger trials justify more.
 
 ## Validation
