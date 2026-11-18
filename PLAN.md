@@ -66,11 +66,12 @@ files, without modifying source workbooks or overwriting earlier outputs.
   login. The CLI has no update check or self-upgrade; reinstalling from a
   newer release is the upgrade path.
 - The source is licensed under the Elastic License 2.0
-  ([LICENSE.md](LICENSE.md)), the same license as `cpaikr/darty`. Every
-  release archive holds `LICENSE.md` beside the executable; the installers
-  require it and install only the executable. The 3.0.0 archives predate
-  this and stay as published. Third-party notices for the bundled .NET
-  runtime and Open XML SDK are not yet included.
+  ([LICENSE.md](LICENSE.md)), the same license as `cpaikr/darty`. From
+  3.0.1 on, every release archive holds `LICENSE.md` beside the executable;
+  the installers require it and install only the executable. Archives of
+  3.0.0 and earlier predate this and stay as published. Third-party
+  notices for the bundled .NET runtime and Open XML SDK are not yet
+  included.
 - The skill is explicit-invocation only until trigger trials justify more.
 
 ## Validation
