@@ -26,8 +26,8 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Publish standalone CLI executables for Windows x64 and Linux x64 with
   checksum-verifying installers and a tag-driven release workflow.
 - [x] Ship the `skill/excel-formula-remover` consumer skill.
-- [ ] Release 3.0.0 and verify the documented installation from an
-  independent terminal.
+- [x] Release 3.0.0 and verify the documented installation from an
+  independent process.
 - [x] Evaluate the skill in fresh agent contexts
   ([2026-11-17](evals/skill/evaluation-2026-11-17.md)): four cases passed.
 - [ ] Run trigger trials before considering implicit invocation, and repeat
@@ -78,15 +78,20 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - GUI single-file and portable CLI release bundles: `2.1.1` (`.xlsb` support)
   published and checksum verified; the released CLI converted Excel-saved
   `.xlsb` samples.
-
-- Agent-facing CLI (2026-11-17, unreleased): 108 tests pass, including five
-  that run the CLI as an external process. A local `publish.ps1` run installed
-  the Windows x64 archive through `install.ps1` and passed the process
-  contract tests against the installed executable. The Linux x64 archive was
-  installed with `install.sh` and run under WSL Ubuntu 24.04 without a .NET
-  runtime (`--version`, help, usage error, checksum rejection); the contract
-  test suite has not yet run against it. The GitHub workflows are unexercised
-  until pushed.
+- Agent-facing CLI `3.0.0` (released 2026-11-18): 108 tests pass, including
+  five that run the CLI as an external process. The tag-driven release
+  workflow built the artifacts and, before publishing, installed the Windows
+  x64 and Linux x64 archives through their installers on their own runners
+  and passed the process contract tests against each installed executable.
+- Windows consumer install of `3.0.0` (2026-11-18): the README commands
+  downloaded the release through `gh`. From a shell started by a packaged
+  desktop app, `install.ps1` refused the redirected default directory as
+  designed; with `-BinDirectory "$env:USERPROFILE\.local\bin"` it installed,
+  and `verify-windows-install.ps1` passed from an independent process: file
+  visible, `--version` reports `3.0.0`, and the command name resolves from
+  the persisted `PATH`. The default `%LOCALAPPDATA%` destination and the
+  Linux `gh` download path were not exercised outside CI.
+- Not covered by a test: SIGTERM cancellation.
 
 ## Open questions
 
