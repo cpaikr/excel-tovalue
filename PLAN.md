@@ -69,9 +69,14 @@ files, without modifying source workbooks or overwriting earlier outputs.
   ([LICENSE.md](LICENSE.md)), the same license as `cpaikr/darty`. From
   3.0.1 on, every release archive holds `LICENSE.md` beside the executable;
   the installers require it and install only the executable. Archives of
-  3.0.0 and earlier predate this and stay as published. Third-party
-  notices for the bundled .NET runtime and Open XML SDK are not yet
-  included.
+  3.0.0 and earlier predate this and stay as published.
+- Release archives built after 3.0.1 also hold `THIRD-PARTY-NOTICES.txt`:
+  the checked-in Open XML SDK notice followed by the license and notices of
+  the runtime packs MSBuild resolved for that build, so the text matches the
+  bundled .NET version. A pack missing an expected file fails the publish.
+  The GUI archive adds the WinForms and WPF notices vendored in
+  `third-party/` from the upstream `v10.0.15` tags, because the Windows
+  Desktop runtime pack ships only its license.
 - The skill is explicit-invocation only until trigger trials justify more.
 
 ## Validation
