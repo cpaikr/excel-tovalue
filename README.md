@@ -306,12 +306,19 @@ pwsh -NoProfile -File ./scripts/test-artifact.ps1 artifacts/publish/1.0.0 1.0.0
 - `excel-formula-remover-gui-<version>-win-x64.zip`: Windows x64용 자체 포함,
   단일 파일 GUI
 - `excel-formula-remover-cli-<version>-win-x64.zip`: Windows x64용 자체 포함,
-  단일 파일 CLI(`excel-formula-remover.exe`와 `LICENSE.md`)
+  단일 파일 CLI(`excel-formula-remover.exe`, `LICENSE.md`,
+  `THIRD-PARTY-NOTICES.txt`)
 - `excel-formula-remover-cli-<version>-linux-x64.tar.gz`: Linux x64(glibc)용
-  자체 포함, 단일 파일 CLI(`excel-formula-remover`와 `LICENSE.md`)
+  자체 포함, 단일 파일 CLI(`excel-formula-remover`, `LICENSE.md`,
+  `THIRD-PARTY-NOTICES.txt`)
 - `SHA256SUMS.txt`: 세 압축 파일의 SHA-256 체크섬
 - `install.ps1`, `install.sh`, `verify-windows-install.ps1`: CLI 설치와 설치
   확인 스크립트
+
+세 압축 파일의 `THIRD-PARTY-NOTICES.txt`는 저장소의
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)에 그 빌드가 포함한 .NET
+런타임 팩의 라이선스와 고지를 이어 붙여 만듭니다. 설치 스크립트는 실행 파일만
+설치합니다.
 
 CLI는 트리밍하지 않은 자체 포함 빌드이며 압축 파일 하나가 약 34MB입니다.
 
@@ -350,4 +357,7 @@ Windows 전용입니다.
 
 ## 라이선스
 
-Elastic License 2.0. [LICENSE.md](LICENSE.md)를 참고하세요.
+Elastic License 2.0. [LICENSE.md](LICENSE.md)를 참고하세요. 릴리스 실행
+파일에 포함된 Open XML SDK와 .NET 런타임의 라이선스 고지는
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)와 각 릴리스 압축 파일에
+있습니다.

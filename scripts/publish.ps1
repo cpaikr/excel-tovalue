@@ -65,6 +65,24 @@ $guiOutput = Join-Path $stagingDirectory 'gui'
 $bundleDirectory = Join-Path $stagingDirectory 'release'
 $installDirectory = Join-Path $repositoryRoot 'scripts/install'
 $licensePath = Join-Path $repositoryRoot 'LICENSE.md'
+$noticesPath = Join-Path $repositoryRoot 'THIRD-PARTY-NOTICES.txt'
+$noticesName = 'THIRD-PARTY-NOTICES.txt'
+
+# The license files each bundled .NET runtime pack must provide. A pack that
+# stops shipping one fails the release instead of silently dropping a notice.
+$runtimePackNotices = [ordered] @{
+    'Microsoft.NETCore.App' = 'LICENSE.TXT', 'THIRD-PARTY-NOTICES.TXT'
+    'Microsoft.WindowsDesktop.App' = @('LICENSE')
+}
+
+# The Windows Desktop runtime pack ships its license but not the third-party
+# notices of the WinForms and WPF sources it is built from, so those are
+# vendored from the upstream repositories. Refresh them when the desktop
+# runtime moves to a new major version.
+$desktopNotices = [ordered] @{
+    'dotnet/winforms: THIRD-PARTY-NOTICES.TXT' = 'third-party/dotnet-winforms-THIRD-PARTY-NOTICES.txt'
+    'dotnet/wpf: THIRD-PARTY-NOTICES.TXT' = 'third-party/dotnet-wpf-THIRD-PARTY-NOTICES.txt'
+}
 
 # The CLI targets this release claims. Each is certified by test-artifact.ps1
 # on its own operating system before the release is published.
@@ -94,6 +112,63 @@ function Restore-ForRuntime {
         '-p:RestorePackagesWithLockFile=false',
         "-p:NuGetLockFilePath=$lockPath"
     )
+}
+
+# A self-contained executable embeds the .NET runtime, whose license requires
+# its copyright and permission notices to travel with every copy. Take them
+# from the runtime packs MSBuild resolved for this exact build rather than a
+# checked-in copy, which would drift from the bundled runtime version.
+function New-ThirdPartyNotices {
+    param(
+        [Parameter(Mandatory)] [string] $Project,
+        [Parameter(Mandatory)] [string] $Runtime,
+        [Parameter(Mandatory)] [string[]] $Frameworks,
+        [Parameter(Mandatory)] [string] $Destination,
+
+        # Section title to repository-relative path of a vendored notice.
+        [System.Collections.IDictionary] $VendoredNotices = @{}
+    )
+
+    # Call this only after the project was restored for $Runtime: against a
+    # runtime-neutral restore the target fails with NETSDK1047.
+    $resolved = & dotnet msbuild $Project "-p:RuntimeIdentifier=$Runtime" '-p:SelfContained=true' `
+        '-t:ResolveFrameworkReferences' '-getItem:ResolvedRuntimePack'
+    if ($LASTEXITCODE -ne 0) {
+        throw "Resolving the $Runtime runtime packs of '$Project' failed with exit code $LASTEXITCODE."
+    }
+
+    $packs = @(($resolved -join "`n" | ConvertFrom-Json).Items.ResolvedRuntimePack)
+    $sections = @([System.IO.File]::ReadAllText($noticesPath).TrimEnd())
+    $rule = '-' * 72
+
+    foreach ($framework in $Frameworks) {
+        $pack = @($packs | Where-Object { $_.FrameworkName -ceq $framework })
+        if ($pack.Count -ne 1) {
+            throw "Expected one resolved $Runtime runtime pack for $framework, found $($pack.Count)."
+        }
+
+        foreach ($fileName in $runtimePackNotices[$framework]) {
+            $file = Join-Path $pack[0].PackageDirectory $fileName
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                throw "Runtime pack '$($pack[0].PackageDirectory)' has no $fileName."
+            }
+
+            $title = "$($pack[0].NuGetPackageId) $($pack[0].NuGetPackageVersion): $fileName"
+            $sections += "$rule`n$title`nhttps://github.com/dotnet/dotnet`n$rule"
+            $sections += [System.IO.File]::ReadAllText($file).Trim()
+        }
+    }
+
+    foreach ($title in $VendoredNotices.Keys) {
+        $file = Join-Path $repositoryRoot $VendoredNotices[$title]
+        $sections += "$rule`n$title`n$rule"
+        $sections += [System.IO.File]::ReadAllText($file).Trim()
+    }
+
+    # One line-ending convention regardless of how each source was checked
+    # out or packaged, so the same inputs always produce the same bytes.
+    $text = (($sections -join "`n`n") -replace "`r`n?", "`n") + "`n"
+    [System.IO.File]::WriteAllText($Destination, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
 Push-Location $repositoryRoot
@@ -136,20 +211,26 @@ try {
         }
 
         # The license requires every copy of the software to come with its
-        # terms. The installers accept an archive holding exactly the
-        # executable and the license, in this order.
+        # terms, and the bundled components require their notices. The
+        # installers accept an archive holding exactly the executable, the
+        # license, and the third-party notices, in this order.
         Copy-Item -LiteralPath $licensePath -Destination $cliOutput
+        New-ThirdPartyNotices -Project $cliProject -Runtime $runtime `
+            -Frameworks 'Microsoft.NETCore.App' -Destination (Join-Path $cliOutput $noticesName)
         $archive = Join-Path $bundleDirectory "excel-formula-remover-cli-$Version-$runtime.$($target.Extension)"
         if ($target.Extension -eq 'zip') {
-            Compress-Archive -LiteralPath $published[0].FullName, (Join-Path $cliOutput 'LICENSE.md') `
-                -DestinationPath $archive -CompressionLevel Optimal
+            Compress-Archive -DestinationPath $archive -CompressionLevel Optimal -LiteralPath @(
+                $published[0].FullName
+                (Join-Path $cliOutput 'LICENSE.md')
+                (Join-Path $cliOutput $noticesName)
+            )
         }
         else {
             # Use the Windows-provided tar: another tar earlier in PATH, such
             # as Git's, can misread drive-letter paths.
             $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
             Invoke-NativeCommand -FilePath $tar -ArgumentList @(
-                '-czf', $archive, '-C', $cliOutput, $target.Executable, 'LICENSE.md'
+                '-czf', $archive, '-C', $cliOutput, $target.Executable, 'LICENSE.md', $noticesName
             )
         }
 
@@ -185,6 +266,9 @@ try {
     }
 
     Copy-Item -LiteralPath $licensePath -Destination $guiOutput
+    New-ThirdPartyNotices -Project $guiProject -Runtime 'win-x64' `
+        -Frameworks 'Microsoft.NETCore.App', 'Microsoft.WindowsDesktop.App' `
+        -Destination (Join-Path $guiOutput $noticesName) -VendoredNotices $desktopNotices
     $guiArchive = Join-Path $bundleDirectory "excel-formula-remover-gui-$Version-win-x64.zip"
     Compress-Archive -Path (Join-Path $guiOutput '*') -DestinationPath $guiArchive -CompressionLevel Optimal
     $archives += $guiArchive

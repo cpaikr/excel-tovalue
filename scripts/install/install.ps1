@@ -133,10 +133,11 @@ try {
 finally {
     $zip.Dispose()
 }
-# The archive carries the license terms beside the executable. Only the
-# executable is installed, so a shared bin directory gains one file.
-if (($entryNames -join '|') -cne "$executableName|LICENSE.md") {
-    throw "Unexpected archive contents; expected only $executableName and LICENSE.md."
+# The archive carries the license terms and third-party notices beside the
+# executable. Only the executable is installed, so a shared bin directory
+# gains one file.
+if (($entryNames -join '|') -cne "$executableName|LICENSE.md|THIRD-PARTY-NOTICES.txt") {
+    throw "Unexpected archive contents; expected only $executableName, LICENSE.md, and THIRD-PARTY-NOTICES.txt."
 }
 
 $null = New-Item -ItemType Directory -Path $BinDirectory -Force
