@@ -29,6 +29,7 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Release 3.0.0 and verify the documented installation from an
   independent process.
 - [x] Release 3.0.1 so every release archive carries the license terms.
+- [x] Release 3.0.2 so every release archive carries third-party notices.
 - [x] Evaluate the skill in fresh agent contexts
   ([2026-11-17](evals/skill/evaluation-2026-11-17.md)): four cases passed.
 - [ ] Run trigger trials before considering implicit invocation, and repeat
@@ -70,7 +71,7 @@ files, without modifying source workbooks or overwriting earlier outputs.
   3.0.1 on, every release archive holds `LICENSE.md` beside the executable;
   the installers require it and install only the executable. Archives of
   3.0.0 and earlier predate this and stay as published.
-- Release archives built after 3.0.1 also hold `THIRD-PARTY-NOTICES.txt`:
+- From 3.0.2 on, release archives also hold `THIRD-PARTY-NOTICES.txt`:
   the checked-in Open XML SDK notice followed by the license and notices of
   the runtime packs MSBuild resolved for that build, so the text matches the
   bundled .NET version. A pack missing an expected file fails the publish.
@@ -114,6 +115,16 @@ files, without modifying source workbooks or overwriting earlier outputs.
   downloaded assets matched `SHA256SUMS.txt`, and the Windows CLI, Linux CLI,
   and GUI archives each list the executable and a `LICENSE.md` identical to
   the repository's. The consumer install was not repeated for `3.0.1`.
+- Third-party notices in archives, `3.0.2` (released 2026-11-20): the release
+  workflow passed the installer and process contract tests on both runners.
+  The downloaded assets matched `SHA256SUMS.txt`, and each archive lists the
+  executable, `LICENSE.md`, and `THIRD-PARTY-NOTICES.txt`. Each notices file
+  holds the Open XML SDK section and the license and notices of the
+  `10.0.15` runtime pack for its own platform; the GUI file adds the Windows
+  Desktop license and the WinForms and WPF notices. The consumer install
+  was not repeated for `3.0.2`.
+- Not covered by a test: the notices content. The installers check only the
+  CLI archive entry names.
 - Not covered by a test: SIGTERM cancellation.
 
 ## Open questions
