@@ -103,7 +103,7 @@ function Invoke-VulnerabilityAudit {
 # A consumer copies one skill directory out of the repository, so every
 # resource it links must live inside that directory.
 function Test-SkillPackages {
-    $skillRoot = Join-Path $repositoryRoot 'skill'
+    $skillRoot = Join-Path $repositoryRoot 'skills'
     $problems = [System.Collections.Generic.List[string]]::new()
 
     foreach ($package in Get-ChildItem -LiteralPath $skillRoot -Directory) {

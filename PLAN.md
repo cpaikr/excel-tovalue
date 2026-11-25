@@ -25,7 +25,7 @@ files, without modifying source workbooks or overwriting earlier outputs.
   `--help`, `--version`, one JSON document on stdout.
 - [x] Publish standalone CLI executables for Windows x64 and Linux x64 with
   checksum-verifying installers and a tag-driven release workflow.
-- [x] Ship the `skill/excel-formula-remover` consumer skill.
+- [x] Ship the `skills/excel-formula-remover` consumer skill.
 - [x] Release 3.0.0 and verify the documented installation from an
   independent process.
 - [x] Release 3.0.1 so every release archive carries the license terms.
