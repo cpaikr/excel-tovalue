@@ -30,7 +30,7 @@ installation guides, and CLI consumer skills.
 | Tests | In-process only | Packaged executable run as an external process |
 | Release | Local `publish.ps1`, manual upload | Tagged CI build, smoke-tested per target |
 | Install | Unzip by hand | Checksum-verifying installer and README guide |
-| Skill | None | `skill/excel-formula-remover/` |
+| Skill | None | `skills/excel-formula-remover/` |
 
 Already aligned and kept: exit codes `0`/`1`/`2`/`130`, stable failure kinds,
 no-clobber outputs with the resolved path returned, empty stderr, preflight
@@ -104,7 +104,7 @@ Files: `src/ExcelFormulaRemover.Cli/ExcelFormulaRemover.Cli.csproj`,
 ### 3. Consumer skill
 
 ```text
-skill/excel-formula-remover/
+skills/excel-formula-remover/
   SKILL.md
   agents/openai.yaml
   references/
@@ -164,5 +164,6 @@ depends on the contract from step 1 and the install path from step 2.
 
 - Measured: each compressed single-file CLI archive is about 34 MB. Native
   AOT stays deferred.
-- How the skill should be registered with `sjskills`, if at all; the plan
-  assumes consumers copy the `skill/excel-formula-remover/` directory.
+- How the skill should be registered with `sjskills`, if at all; consumers
+  install `skills/excel-formula-remover/` with `npx skills add` or by
+  copying the directory.

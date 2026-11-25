@@ -250,14 +250,27 @@ dotnet run `
 ## 에이전트 스킬
 
 AI 에이전트용 스킬 원본은
-[`skill/excel-formula-remover`](skill/excel-formula-remover/SKILL.md)에 있습니다.
+[`skills/excel-formula-remover`](skills/excel-formula-remover/SKILL.md)에 있습니다.
 명령 도움말이 알려 주지 못하는 판단을 담습니다. 저장값이 없는 파일(예:
 openpyxl로 만든 파일)의 처리, 오래된 저장값 경고, 실패 종류별 복구, 결과 보고
 범위입니다. 설치 안내는 실행 파일이 없을 때만 읽도록 분리되어 있습니다.
 
-`skill/excel-formula-remover` 폴더 전체(`references/`, `agents/` 포함)를
-사용하는 에이전트의 스킬 위치에 복사해 설치합니다. 스킬은 명시적으로 호출할 때만
-동작하도록 설정되어 있습니다. 실행 파일은 위 절차로 따로 설치합니다.
+[`skills` CLI](https://github.com/vercel-labs/skills)로 설치하거나, 저장소
+클론에서 `skills/excel-formula-remover` 폴더 전체(`references/`, `agents/`
+포함)를 사용하는 에이전트의 스킬 위치에 복사합니다.
+
+```powershell
+npx skills add cpaikr/excel-tovalue --skill excel-formula-remover
+```
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null
+Copy-Item -Recurse .\skills\excel-formula-remover "$HOME\.agents\skills\"
+```
+
+스킬은 명시적으로 호출할 때만 동작하도록 설정되어 있습니다. 실행 파일은 위
+절차로 따로 설치합니다. 실행 파일이 없으면 스킬이 에이전트에게 같은 설치
+절차를 따르게 합니다.
 
 ## 개발과 검증
 
@@ -337,7 +350,7 @@ tests/
   ExcelFormulaRemover.Core.Tests/ 변환 안전성·충실도 테스트
   ExcelFormulaRemover.Cli.Tests/  파싱·출력·종료 코드와 프로세스 계약 테스트
   ExcelFormulaRemover.App.Tests/  GUI 지원 로직·수명 주기 테스트
-skill/
+skills/
   excel-formula-remover/          AI 에이전트용 CLI 소비자 스킬
 scripts/
   check.ps1                       전체 검증 게이트
