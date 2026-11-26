@@ -91,18 +91,18 @@ jobs:
 
       - name: Restore portable projects
         run: |
-          dotnet restore tests/ExcelFormulaRemover.Core.Tests/ExcelFormulaRemover.Core.Tests.csproj --locked-mode
-          dotnet restore tests/ExcelFormulaRemover.Cli.Tests/ExcelFormulaRemover.Cli.Tests.csproj --locked-mode
+          dotnet restore tests/XlClean.Core.Tests/XlClean.Core.Tests.csproj --locked-mode
+          dotnet restore tests/XlClean.Cli.Tests/XlClean.Cli.Tests.csproj --locked-mode
 
       - name: Build portable projects
         run: |
-          dotnet build tests/ExcelFormulaRemover.Core.Tests/ExcelFormulaRemover.Core.Tests.csproj --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
-          dotnet build tests/ExcelFormulaRemover.Cli.Tests/ExcelFormulaRemover.Cli.Tests.csproj --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+          dotnet build tests/XlClean.Core.Tests/XlClean.Core.Tests.csproj --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+          dotnet build tests/XlClean.Cli.Tests/XlClean.Cli.Tests.csproj --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Test portable projects
         run: |
-          dotnet test tests/ExcelFormulaRemover.Core.Tests/ExcelFormulaRemover.Core.Tests.csproj --configuration Release --no-build --no-restore --logger trx --results-directory artifacts/test-results/portable
-          dotnet test tests/ExcelFormulaRemover.Cli.Tests/ExcelFormulaRemover.Cli.Tests.csproj --configuration Release --no-build --no-restore --logger trx --results-directory artifacts/test-results/portable
+          dotnet test tests/XlClean.Core.Tests/XlClean.Core.Tests.csproj --configuration Release --no-build --no-restore --logger trx --results-directory artifacts/test-results/portable
+          dotnet test tests/XlClean.Cli.Tests/XlClean.Cli.Tests.csproj --configuration Release --no-build --no-restore --logger trx --results-directory artifacts/test-results/portable
 
       - name: Upload portable test results
         if: always()

@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/XlClean.App/XlClean.App.csproj" />
+  <Project Path="src/XlClean.Cli/XlClean.Cli.csproj" />
+  <Project Path="src/XlClean.Core/XlClean.Core.csproj" />
+  <Project Path="tests/XlClean.Cli.Tests/XlClean.Cli.Tests.csproj" />
+  <Project Path="tests/XlClean.Core.Tests/XlClean.Core.Tests.csproj" />
+  <Project Path="tests/XlClean.App.Tests/XlClean.App.Tests.csproj" />
+</Solution>

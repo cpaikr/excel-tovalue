@@ -1,4 +1,4 @@
-# Excel Formula Remover plan
+# xlclean plan
 
 The 2026 rewrite is recorded in [plans/rewrite.md](plans/rewrite.md). The
 agent-facing CLI and consumer skill are designed in
@@ -38,7 +38,9 @@ files, without modifying source workbooks or overwriting earlier outputs.
   the installation case against a real release.
 - [x] Plan the `xlclean` rename and style cleanup
   ([plans/style-cleanup.md](plans/style-cleanup.md), 2026-11-26).
-- [ ] Rename to `xlclean` with no behavior change.
+- [x] Rename the source tree, executables, release assets, and installers to
+  `xlclean` with no behavior change. The skill, installation docs, and
+  repository keep the 3.x names until 4.0.0.
 - [ ] Split the CLI into `values` and `styles` subcommands.
 - [ ] Extract the shared per-file safety pipeline from the formula engine.
 - [ ] Style cleanup for `.xlsx`/`.xlsm`, then `.xlsb`.

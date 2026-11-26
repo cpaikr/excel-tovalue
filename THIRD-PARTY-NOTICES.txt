@@ -1,7 +1,7 @@
-Excel Formula Remover third-party notices
-=========================================
+xlclean third-party notices
+===========================
 
-Excel Formula Remover is licensed under the Elastic License 2.0; see
+xlclean is licensed under the Elastic License 2.0; see
 LICENSE.md. Its release executables bundle the third-party software named
 below. Each component remains under its own license, reproduced here.
 

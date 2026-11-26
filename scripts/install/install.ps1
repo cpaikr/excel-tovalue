@@ -1,25 +1,25 @@
-# Install the excel-formula-remover CLI on Windows x64.
+# Install the xlclean CLI on Windows x64.
 # Use this installer, the archive, and SHA256SUMS.txt from the same release.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string] $Archive,
     [Parameter(Mandatory)][string] $Checksums,
-    [string] $BinDirectory = (Join-Path $env:LOCALAPPDATA 'excel-formula-remover\bin')
+    [string] $BinDirectory = (Join-Path $env:LOCALAPPDATA 'xlclean\bin')
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$executableName = 'excel-formula-remover.exe'
-$archivePattern = '^excel-formula-remover-cli-(?<version>[0-9A-Za-z.-]+)-win-x64\.zip$'
+$executableName = 'xlclean.exe'
+$archivePattern = '^xlclean-cli-(?<version>[0-9A-Za-z.-]+)-win-x64\.zip$'
 
 if ([Environment]::OSVersion.Platform -ne 'Win32NT' -or
     [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ne 'X64') {
     throw 'This installer requires Windows x64.'
 }
 
-if (-not ('ExcelFormulaRemoverInstallerNative' -as [type])) {
+if (-not ('XlCleanInstallerNative' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
@@ -28,7 +28,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-public static class ExcelFormulaRemoverInstallerNative
+public static class XlCleanInstallerNative
 {
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetFinalPathNameByHandle(
@@ -80,13 +80,13 @@ function ConvertTo-ComparableWindowsPath([string] $Path) {
 # program sees. Installing there would report success for an executable the
 # user's own terminal cannot find, so refuse it before changing anything.
 function Assert-InstallationPathIsVisible([string] $Path) {
-    $probe = Join-Path $Path ('.excel-formula-remover-visibility-' + [Guid]::NewGuid().ToString('N'))
+    $probe = Join-Path $Path ('.xlclean-visibility-' + [Guid]::NewGuid().ToString('N'))
     try {
-        [IO.File]::WriteAllText($probe, 'excel-formula-remover installer visibility probe')
+        [IO.File]::WriteAllText($probe, 'xlclean installer visibility probe')
         try {
             $advertised = ConvertTo-ComparableWindowsPath $probe
             $physical = ConvertTo-ComparableWindowsPath (
-                [ExcelFormulaRemoverInstallerNative]::GetFinalPath($probe))
+                [XlCleanInstallerNative]::GetFinalPath($probe))
         }
         catch {
             throw "Could not verify the physical installation path for '$Path': $($_.Exception.Message) Run this installer from an independently launched PowerShell session, or choose a local directory with -BinDirectory."
@@ -111,7 +111,7 @@ No existing installation was changed. Run this installer from an independently l
 $Archive = (Resolve-Path -LiteralPath $Archive).ProviderPath
 $archiveName = [IO.Path]::GetFileName($Archive)
 if ($archiveName -cnotmatch $archivePattern) {
-    throw "Expected an archive named excel-formula-remover-cli-<version>-win-x64.zip, not '$archiveName'."
+    throw "Expected an archive named xlclean-cli-<version>-win-x64.zip, not '$archiveName'."
 }
 $version = $Matches['version']
 
@@ -144,7 +144,7 @@ $null = New-Item -ItemType Directory -Path $BinDirectory -Force
 $BinDirectory = (Resolve-Path -LiteralPath $BinDirectory).ProviderPath
 Assert-InstallationPathIsVisible $BinDirectory
 
-$stage = Join-Path $BinDirectory ('.excel-formula-remover-install-' + [Guid]::NewGuid().ToString('N'))
+$stage = Join-Path $BinDirectory ('.xlclean-install-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $stage
 try {
     Expand-Archive -LiteralPath $Archive -DestinationPath $stage
@@ -152,8 +152,8 @@ try {
 
     # Check the candidate before it replaces a working installation.
     $reported = (& $candidate --version) -join ' '
-    if ($LASTEXITCODE -ne 0 -or $reported -cne "excel-formula-remover $version") {
-        throw "The candidate reported '$reported' instead of 'excel-formula-remover $version'; the existing installation was not changed."
+    if ($LASTEXITCODE -ne 0 -or $reported -cne "xlclean $version") {
+        throw "The candidate reported '$reported' instead of 'xlclean $version'; the existing installation was not changed."
     }
 
     $destination = Join-Path $BinDirectory $executableName
@@ -166,7 +166,7 @@ try {
         [IO.File]::Move($candidate, $destination)
     }
 
-    Write-Output "Installed excel-formula-remover $version to $destination"
+    Write-Output "Installed xlclean $version to $destination"
     Write-Output "Add $BinDirectory to the user PATH if needed; new terminals pick up a persistent PATH change."
 }
 finally {
