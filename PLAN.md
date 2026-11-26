@@ -2,7 +2,9 @@
 
 The 2026 rewrite is recorded in [plans/rewrite.md](plans/rewrite.md). The
 agent-facing CLI and consumer skill are designed in
-[plans/agent-cli.md](plans/agent-cli.md).
+[plans/agent-cli.md](plans/agent-cli.md). The next release renames the tool
+`xlclean` and adds XLStylesTool-style cleanup; its design and order are in
+[plans/style-cleanup.md](plans/style-cleanup.md).
 
 ## Goal
 
@@ -34,6 +36,14 @@ files, without modifying source workbooks or overwriting earlier outputs.
   ([2026-11-17](evals/skill/evaluation-2026-11-17.md)): four cases passed.
 - [ ] Run trigger trials before considering implicit invocation, and repeat
   the installation case against a real release.
+- [x] Plan the `xlclean` rename and style cleanup
+  ([plans/style-cleanup.md](plans/style-cleanup.md), 2026-11-26).
+- [ ] Rename to `xlclean` with no behavior change.
+- [ ] Split the CLI into `values` and `styles` subcommands.
+- [ ] Extract the shared per-file safety pipeline from the formula engine.
+- [ ] Style cleanup for `.xlsx`/`.xlsm`, then `.xlsb`.
+- [ ] Release 4.0.0 and rename the repository to `cpaikr/xlclean`.
+- [ ] Style cleanup in the GUI (4.1.0).
 
 ## Product constraints
 
@@ -129,5 +139,5 @@ files, without modifying source workbooks or overwriting earlier outputs.
 
 ## Open questions
 
-None. The user delegated implementation and product trade-offs for this
-rewrite.
+- Style cleanup samples: whether the owner supplies real bloated workbooks
+  (see [plans/style-cleanup.md](plans/style-cleanup.md#open-questions)).
