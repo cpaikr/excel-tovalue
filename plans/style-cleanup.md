@@ -1,7 +1,7 @@
 # xlclean: rename and style cleanup
 
-Status: steps 1 to 8 done on 2026-11-26; 4.0.0 is released. The GUI (step 9,
-4.1.0) remains.
+Status: steps 1 to 8 done on 2026-11-26 (4.0.0 released); step 9, the GUI,
+done on 2026-11-27 and awaiting the 4.1.0 release.
 [PLAN.md](../PLAN.md) owns current state; this document owns the design and
 order of the work.
 

@@ -10,7 +10,7 @@ public sealed class BatchSummaryFormatterTests
     [TestMethod]
     public void CompletionIncludesCountsPublishedOutputsGuidanceAndWarnings()
     {
-        FormulaRemovalBatchResult result = new(
+        DesktopBatchResult result = new(
         [
             Success(
                 @"C:\input\Good.xlsx",
@@ -51,7 +51,7 @@ public sealed class BatchSummaryFormatterTests
     [TestMethod]
     public void CancellationClearlyDescribesCompletedOutputs()
     {
-        FormulaRemovalBatchResult completed = new(
+        DesktopBatchResult completed = new(
             [Success("First.xlsx", @"C:\output\First_수식제거.xlsx")]);
 
         string summary = BatchSummaryFormatter.Format(
@@ -76,7 +76,7 @@ public sealed class BatchSummaryFormatterTests
     public void EmptyPartialResultStatesThatNothingWasPublished()
     {
         string summary = BatchSummaryFormatter.Format(
-            new FormulaRemovalBatchResult([]),
+            new DesktopBatchResult([]),
             canceled: true,
             outputDirectory: string.Empty);
 
@@ -88,7 +88,7 @@ public sealed class BatchSummaryFormatterTests
     [TestMethod]
     public void DefaultLimitIsGlobalAndPrioritizesRecoveryDetails()
     {
-        List<FormulaRemovalFileResult> files = [];
+        List<DesktopFileResult> files = [];
         for (int index = 0; index < 10; index++)
         {
             files.Add(Success(
@@ -102,7 +102,7 @@ public sealed class BatchSummaryFormatterTests
         }
 
         string summary = BatchSummaryFormatter.Format(
-            new FormulaRemovalBatchResult(files),
+            new DesktopBatchResult(files),
             canceled: false,
             "output");
 
@@ -126,7 +126,7 @@ public sealed class BatchSummaryFormatterTests
         WorkbookFailureKind failureKind,
         string expectedGuidance)
     {
-        FormulaRemovalBatchResult result = new(
+        DesktopBatchResult result = new(
             [Failure("Book.xlsx", failureKind, "detail")]);
 
         string summary = BatchSummaryFormatter.Format(result, false, "output");
@@ -139,7 +139,7 @@ public sealed class BatchSummaryFormatterTests
     {
         string longTail = new('x', 5_000);
         string longPath = @"C:\" + new string('d', 500) + @"\Book.xlsx";
-        FormulaRemovalBatchResult result = new(
+        DesktopBatchResult result = new(
         [
             Failure(
                 longPath,
@@ -157,19 +157,87 @@ public sealed class BatchSummaryFormatterTests
     }
 
     [TestMethod]
+    public void StyleCleanupShowsCountsAndExplainsStyleWarnings()
+    {
+        DesktopBatchResult result = new(
+        [
+            new DesktopFileResult(
+                @"C:\input\Report.xlsm",
+                @"C:\output\Report_스타일정리.xlsm",
+                WorkbookFailureKind.None,
+                null,
+                new StyleCleanupChanges(2001, 1, 40, 12, 3),
+                [
+                    "The workbook has macros and 2000 unused custom cell styles were removed; " +
+                        $"{StyleCleanupEngine.MacroStyleWarningPhrase} may no longer find it.",
+                    "The cleaned workbook still has 70000 cell and style formats, more than the 65430 " +
+                        $"Excel supports; it may still report {StyleCleanupEngine.FormatLimitWarningPhrase}.",
+                ]),
+            new DesktopFileResult(
+                @"C:\input\Clean.xlsx",
+                @"C:\output\Clean_스타일정리.xlsx",
+                WorkbookFailureKind.None,
+                null,
+                new StyleCleanupChanges(1, 1, 2, 2, 0),
+                Array.Empty<string>()),
+        ]);
+
+        string summary = BatchSummaryFormatter.Format(result, canceled: false, @"C:\output");
+
+        Assert.AreEqual(
+            """
+            처리가 완료되었습니다.
+            전체 2개 · 성공 2개 · 실패 0개
+            출력 폴더: C:\output
+
+            주의 사항
+            • C:\input\Report.xlsm — 매크로가 있는 통합 문서에서 사용하지 않는 사용자 지정 셀 스타일 2000개를 제거했습니다. 스타일 이름으로 서식을 적용하는 매크로가 있다면 동작을 확인하세요.
+            • C:\input\Report.xlsm — 정리한 뒤에도 셀 서식과 스타일 서식 70000개가 Excel 한도 65430개를 넘습니다. '셀 서식이 너무 많습니다' 오류가 계속될 수 있습니다.
+
+            저장된 파일
+            • C:\output\Report_스타일정리.xlsm
+              셀 스타일 2001 → 1개 · 셀 서식 40 → 12개 · 같은 서식 3개 병합
+            • C:\output\Clean_스타일정리.xlsx
+              셀 스타일 1 → 1개 · 셀 서식 2 → 2개
+            """.ReplaceLineEndings("\n"),
+            summary);
+    }
+
+    [TestMethod]
+    public void StyleWarningWithoutACountStaysGrammatical()
+    {
+        DesktopBatchResult result = new(
+            [Success("Book.xlsm", "Out.xlsm", [$"Styles were removed; {StyleCleanupEngine.MacroStyleWarningPhrase}."])]);
+
+        string summary = BatchSummaryFormatter.Format(result, canceled: false, "output");
+
+        StringAssert.Contains(summary, "사용자 지정 셀 스타일을 제거했습니다.");
+    }
+
+    [TestMethod]
+    public void UnrecognizedWarningIsShownAsIs()
+    {
+        DesktopBatchResult result = new([Success("Book.xlsx", "Out.xlsx", ["something new"])]);
+
+        string summary = BatchSummaryFormatter.Format(result, canceled: false, "output");
+
+        StringAssert.Contains(summary, "• Book.xlsx — something new");
+    }
+
+    [TestMethod]
     [DataRow(0)]
     [DataRow(51)]
     public void DetailLimitHasAValidBoundedRange(int detailLimit)
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             BatchSummaryFormatter.Format(
-                new FormulaRemovalBatchResult([]),
+                new DesktopBatchResult([]),
                 false,
                 "output",
                 detailLimit));
     }
 
-    private static FormulaRemovalFileResult Success(
+    private static DesktopFileResult Success(
         string inputPath,
         string outputPath,
         IReadOnlyList<string>? warnings = null) =>
@@ -178,13 +246,10 @@ public sealed class BatchSummaryFormatterTests
             outputPath,
             WorkbookFailureKind.None,
             null,
-            3,
-            2,
-            0,
-            0,
+            null,
             warnings ?? Array.Empty<string>());
 
-    private static FormulaRemovalFileResult Failure(
+    private static DesktopFileResult Failure(
         string inputPath,
         WorkbookFailureKind failureKind,
         string message) =>
@@ -193,10 +258,7 @@ public sealed class BatchSummaryFormatterTests
             null,
             failureKind,
             message,
-            0,
-            0,
-            0,
-            0,
+            null,
             Array.Empty<string>());
 
     private static int CountOccurrences(string value, string expected)

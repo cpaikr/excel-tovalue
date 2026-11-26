@@ -66,7 +66,10 @@ files, without modifying source workbooks or overwriting earlier outputs.
   it never calculated) is a missing value unless the result is text. Before
   the fix, released 3.x and 4.0.0 silently blanked such cells.
 - [x] Release 4.0.1 with that fix (2026-11-27).
-- [ ] Style cleanup in the GUI (4.1.0).
+- [x] Style cleanup in the GUI: an operation selector runs `values` or
+  `styles` through the same engines; style mode hides the scope settings and
+  the summary shows each file's style and format counts.
+- [ ] Release 4.1.0 with the GUI change.
 
 ## Product constraints
 
@@ -184,6 +187,13 @@ files, without modifying source workbooks or overwriting earlier outputs.
   with `missing-cached-value` and published nothing. The README's Linux
   commands installed `xlclean 4.0.1` under WSL Ubuntu 24.04. The README's
   Windows download commands were not rerun.
+- GUI style mode (2026-11-27, `main` toward 4.1.0): 230 tests pass, including
+  the result mapping for both engines, cancellation with completed files, the
+  style summary with the engine's own warning phrases, unique access keys, and
+  the operation switch on a constructed form. The form rendered correctly in
+  both modes, and its own request path cleaned the Excel-saved `.xlsb` fixture
+  with the real engine (8 to 3 cell styles), the source unchanged. Not
+  exercised: clicking through the native dialogs.
 - Not covered by a test: the notices content. The installers check only the
   CLI archive entry names.
 - Not covered by a test: SIGTERM cancellation.

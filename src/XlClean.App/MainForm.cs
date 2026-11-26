@@ -10,10 +10,15 @@ internal sealed class MainForm : Form
     private const int MaximumSummaryDetails = 6;
 
     private readonly InputWorkbookSet inputWorkbooks = new();
-    private readonly DesktopConversionController conversionController =
-        new(FormulaRemovalEngine.ConvertAsync);
+    private readonly DesktopConversionController conversionController = new();
     private readonly Font titleFont;
     private readonly ToolTip toolTip = new();
+    private readonly Label titleLabel = new();
+    private readonly Label explanationLabel = new();
+    private readonly RadioButton valuesOperationButton = new();
+    private readonly RadioButton stylesOperationButton = new();
+    private readonly GroupBox settingsGroup = new();
+    private readonly List<Control> scopeControls = [];
     private readonly ListView fileListView = new();
     private readonly Label fileCountLabel = new();
     private readonly Button addFilesButton = new();
@@ -44,6 +49,7 @@ internal sealed class MainForm : Form
         InitializeWindow();
         InitializeLayout();
         WireEvents();
+        ApplyOperation();
         UpdateFileList();
     }
 
@@ -67,9 +73,9 @@ internal sealed class MainForm : Form
 
     private void InitializeWindow()
     {
-        Text = "Excel 수식 값 변환기";
-        AccessibleName = "Excel 수식 값 변환기";
-        AccessibleDescription = "Excel 파일의 수식을 마지막으로 저장된 계산값으로 바꿉니다.";
+        Text = "xlclean - Excel 정리 도구";
+        AccessibleName = "xlclean Excel 정리 도구";
+        AccessibleDescription = "Excel 파일의 수식을 저장된 값으로 바꾸거나 사용하지 않는 스타일과 셀 서식을 정리합니다.";
         AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(WindowWidth, WindowHeight);
         MinimumSize = new Size(740, 600);
@@ -93,39 +99,83 @@ internal sealed class MainForm : Form
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        Label titleLabel = new()
-        {
-            AutoSize = true,
-            Font = titleFont,
-            Margin = new Padding(0, 0, 0, 6),
-            Text = "수식을 마지막 저장 값으로 바꾸기",
-            UseMnemonic = false,
-        };
+        titleLabel.AutoSize = true;
+        titleLabel.Font = titleFont;
+        titleLabel.Margin = new Padding(0, 0, 0, 6);
+        titleLabel.UseMnemonic = false;
 
-        Label explanationLabel = new()
-        {
-            AutoSize = true,
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 0, 18),
-            MaximumSize = new Size(680, 0),
-            Text = "원본 파일은 변경하지 않습니다. Excel이 마지막으로 저장한 계산값만 사용하며, 이 앱에서 수식을 다시 계산하지 않습니다.",
-            UseMnemonic = false,
-        };
+        explanationLabel.AutoSize = true;
+        explanationLabel.Dock = DockStyle.Fill;
+        explanationLabel.Margin = new Padding(0, 0, 0, 18);
+        explanationLabel.MaximumSize = new Size(680, 0);
+        explanationLabel.UseMnemonic = false;
 
         root.Controls.Add(titleLabel, 0, 0);
         root.Controls.Add(explanationLabel, 0, 1);
-        root.Controls.Add(CreateFilesSection(), 0, 2);
-        root.Controls.Add(CreateSettingsSection(), 0, 3);
-        root.Controls.Add(CreateProgressSection(), 0, 4);
-        root.Controls.Add(CreateActionSection(), 0, 5);
+        root.Controls.Add(CreateOperationSection(), 0, 2);
+        root.Controls.Add(CreateFilesSection(), 0, 3);
+        root.Controls.Add(CreateSettingsSection(), 0, 4);
+        root.Controls.Add(CreateProgressSection(), 0, 5);
+        root.Controls.Add(CreateActionSection(), 0, 6);
 
         Controls.Add(root);
         ResumeLayout(performLayout: true);
+    }
+
+    private GroupBox CreateOperationSection()
+    {
+        GroupBox group = new()
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 0, 14),
+            Padding = new Padding(12),
+            TabIndex = 0,
+            Text = "1. 작업",
+        };
+
+        FlowLayoutPanel choices = new()
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+            WrapContents = true,
+        };
+
+        ConfigureOperationButton(
+            valuesOperationButton,
+            "수식을 값으로 바꾸기(&V)",
+            "수식을 Excel이 마지막으로 저장한 계산값으로 바꿉니다.");
+        valuesOperationButton.Checked = true;
+        valuesOperationButton.TabIndex = 0;
+        ConfigureOperationButton(
+            stylesOperationButton,
+            "스타일 정리(&T)",
+            "사용하지 않는 사용자 지정 셀 스타일과 셀 서식을 제거하고 같은 셀 서식을 합칩니다.");
+        stylesOperationButton.TabIndex = 1;
+
+        choices.Controls.AddRange([valuesOperationButton, stylesOperationButton]);
+        group.Controls.Add(choices);
+        return group;
+    }
+
+    private void ConfigureOperationButton(RadioButton button, string text, string description)
+    {
+        button.AutoSize = true;
+        button.Margin = new Padding(0, 0, 24, 0);
+        button.Text = text;
+        button.AccessibleName = text.Replace("&", string.Empty, StringComparison.Ordinal);
+        button.AccessibleDescription = description;
+        button.UseMnemonic = true;
+        toolTip.SetToolTip(button, description);
     }
 
     private GroupBox CreateFilesSection()
@@ -135,8 +185,8 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 0, 14),
             Padding = new Padding(12),
-            TabIndex = 0,
-            Text = "1. 원본 파일",
+            TabIndex = 1,
+            Text = "2. 원본 파일",
         };
 
         TableLayoutPanel layout = new()
@@ -161,7 +211,7 @@ internal sealed class MainForm : Form
             WrapContents = true,
         };
 
-        ConfigureButton(addFilesButton, "파일 추가(&A)...", "변환할 Excel 파일을 선택합니다.");
+        ConfigureButton(addFilesButton, "파일 추가(&A)...", "처리할 Excel 파일을 선택합니다.");
         ConfigureButton(removeFilesButton, "선택 제거(&R)", "목록에서 선택한 파일을 제거합니다.");
         ConfigureButton(clearFilesButton, "모두 지우기(&L)", "목록의 모든 파일을 제거합니다.");
         addFilesButton.TabIndex = 0;
@@ -178,7 +228,7 @@ internal sealed class MainForm : Form
             UseMnemonic = false,
         };
 
-        fileListView.AccessibleName = "변환할 원본 파일";
+        fileListView.AccessibleName = "처리할 원본 파일";
         fileListView.AccessibleDescription = "추가한 Excel 파일의 이름과 폴더를 보여 줍니다.";
         fileListView.AllowDrop = true;
         fileListView.Dock = DockStyle.Fill;
@@ -210,16 +260,13 @@ internal sealed class MainForm : Form
 
     private GroupBox CreateSettingsSection()
     {
-        GroupBox group = new()
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 0, 14),
-            Padding = new Padding(12),
-            TabIndex = 1,
-            Text = "2. 저장 위치와 범위",
-        };
+        GroupBox group = settingsGroup;
+        group.AutoSize = true;
+        group.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        group.Dock = DockStyle.Fill;
+        group.Margin = new Padding(0, 0, 0, 14);
+        group.Padding = new Padding(12);
+        group.TabIndex = 2;
 
         TableLayoutPanel layout = new()
         {
@@ -236,7 +283,7 @@ internal sealed class MainForm : Form
         Label outputLabel = CreateFieldLabel("출력 폴더(&O)");
         outputLabel.TabIndex = 0;
         outputDirectoryTextBox.AccessibleName = "출력 폴더";
-        outputDirectoryTextBox.AccessibleDescription = "변환한 새 파일을 저장할 폴더입니다.";
+        outputDirectoryTextBox.AccessibleDescription = "처리한 새 파일을 저장할 폴더입니다.";
         outputDirectoryTextBox.Dock = DockStyle.Fill;
         outputDirectoryTextBox.Margin = new Padding(8, 3, 8, 3);
         outputDirectoryTextBox.TabIndex = 1;
@@ -287,6 +334,15 @@ internal sealed class MainForm : Form
             UseMnemonic = false,
         };
         layout.SetColumnSpan(excludedSheetsHint, 2);
+        scopeControls.AddRange(
+        [
+            startRowLabel,
+            startRowInput,
+            startRowHint,
+            excludedSheetsLabel,
+            excludedSheetsTextBox,
+            excludedSheetsHint,
+        ]);
 
         layout.Controls.Add(outputLabel, 0, 0);
         layout.Controls.Add(outputDirectoryTextBox, 1, 0);
@@ -311,11 +367,11 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 0, 12),
             RowCount = 2,
-            TabIndex = 2,
+            TabIndex = 3,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        statusLabel.AccessibleName = "변환 상태";
+        statusLabel.AccessibleName = "처리 상태";
         statusLabel.AccessibleRole = AccessibleRole.StatusBar;
         statusLabel.AutoEllipsis = true;
         statusLabel.Dock = DockStyle.Fill;
@@ -323,7 +379,7 @@ internal sealed class MainForm : Form
         statusLabel.Text = "파일을 추가하면 시작할 수 있습니다.";
         statusLabel.UseMnemonic = false;
 
-        progressBar.AccessibleName = "파일 변환 진행률";
+        progressBar.AccessibleName = "파일 처리 진행률";
         progressBar.Dock = DockStyle.Fill;
         progressBar.Maximum = 1;
         progressBar.Minimum = 0;
@@ -343,7 +399,7 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
             Margin = new Padding(0),
-            TabIndex = 3,
+            TabIndex = 4,
             WrapContents = false,
         };
 
@@ -352,7 +408,7 @@ internal sealed class MainForm : Form
         convertButton.Size = new Size(130, 36);
         convertButton.TabIndex = 0;
 
-        ConfigureButton(cancelButton, "취소(&X)", "진행 중인 변환을 안전하게 취소합니다.");
+        ConfigureButton(cancelButton, "취소(&X)", "진행 중인 작업을 안전하게 취소합니다.");
         cancelButton.AutoSize = false;
         cancelButton.Size = new Size(90, 36);
         cancelButton.Enabled = false;
@@ -371,6 +427,8 @@ internal sealed class MainForm : Form
         browseOutputButton.Click += BrowseOutputButton_Click;
         convertButton.Click += ConvertButton_Click;
         cancelButton.Click += CancelButton_Click;
+        valuesOperationButton.CheckedChanged += (_, _) => ApplyOperation();
+        stylesOperationButton.CheckedChanged += (_, _) => ApplyOperation();
         outputDirectoryTextBox.TextChanged += (_, _) => UpdateActionState();
         fileListView.SelectedIndexChanged += (_, _) => UpdateActionState();
         fileListView.DragEnter += FileListView_DragEnter;
@@ -414,7 +472,7 @@ internal sealed class MainForm : Form
             Filter = "Excel 통합 문서 (*.xlsx;*.xlsm;*.xlsb)|*.xlsx;*.xlsm;*.xlsb",
             Multiselect = true,
             RestoreDirectory = true,
-            Title = "변환할 Excel 파일 선택",
+            Title = "처리할 Excel 파일 선택",
         };
 
         string? initialDirectory = GetInitialDirectory();
@@ -463,7 +521,7 @@ internal sealed class MainForm : Form
     {
         using FolderBrowserDialog dialog = new()
         {
-            Description = "변환한 새 파일을 저장할 폴더를 선택하세요.",
+            Description = "처리한 새 파일을 저장할 폴더를 선택하세요.",
             ShowNewFolderButton = true,
             UseDescriptionForTitle = true,
         };
@@ -482,10 +540,13 @@ internal sealed class MainForm : Form
 
     private async void ConvertButton_Click(object? sender, EventArgs e)
     {
-        FormulaRemovalRequest request;
+        OperationText text = CurrentText;
+        DesktopBatchRunner runner;
+        string outputDirectory;
+        int fileCount;
         try
         {
-            request = CreateRequest();
+            (runner, outputDirectory, fileCount) = CreateRunner();
         }
         catch (Exception exception) when (
             exception is ArgumentException or NotSupportedException or PathTooLongException or
@@ -496,16 +557,16 @@ internal sealed class MainForm : Form
         }
 
         isProcessing = true;
-        progressBar.Maximum = Math.Max(1, request.InputPaths.Count);
+        progressBar.Maximum = Math.Max(1, fileCount);
         progressBar.Value = 0;
         SetProcessingState(processing: true);
-        SetStatus($"변환 준비 중 · {request.InputPaths.Count:N0}개 파일");
+        SetStatus($"{text.Verb} 준비 중 · {fileCount:N0}개 파일");
 
         DesktopConversionOutcome outcome;
         try
         {
-            Progress<WorkbookProgress> progress = new(UpdateProgress);
-            outcome = await conversionController.RunAsync(request, progress);
+            Progress<WorkbookProgress> progress = new(value => UpdateProgress(value, text));
+            outcome = await conversionController.RunAsync(runner, progress);
         }
         finally
         {
@@ -522,18 +583,18 @@ internal sealed class MainForm : Form
 
         if (outcome.Failure is not null)
         {
-            SetStatus("변환을 시작하지 못했습니다. 출력 폴더와 파일 접근 권한을 확인하세요.");
+            SetStatus($"{text.VerbObject} 시작하지 못했습니다. 출력 폴더와 파일 접근 권한을 확인하세요.");
             MessageBox.Show(
                 this,
-                "변환을 시작하지 못했습니다.\n\n출력 폴더 경로와 파일 접근 권한을 확인한 뒤 다시 시도하세요.\n\n" +
+                $"{text.VerbObject} 시작하지 못했습니다.\n\n출력 폴더 경로와 파일 접근 권한을 확인한 뒤 다시 시도하세요.\n\n" +
                     LimitText(outcome.Failure.Message, 500),
-                "변환 시작 실패",
+                $"{text.Verb} 시작 실패",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return;
         }
 
-        ShowBatchResult(outcome.Result, outcome.WasCanceled, request.OutputDirectory);
+        ShowBatchResult(outcome.Result, outcome.WasCanceled, outputDirectory, text);
     }
 
     private void CancelButton_Click(object? sender, EventArgs e)
@@ -594,8 +655,8 @@ internal sealed class MainForm : Form
 
         DialogResult choice = MessageBox.Show(
             this,
-            "변환을 안전하게 취소한 뒤 창을 닫을까요?\n\n이미 완료된 파일은 그대로 유지되고, 처리 중인 임시 파일은 정리됩니다.",
-            "변환 중",
+            $"{CurrentText.VerbObject} 안전하게 취소한 뒤 창을 닫을까요?\n\n이미 완료된 파일은 그대로 유지되고, 처리 중인 임시 파일은 정리됩니다.",
+            $"{CurrentText.Verb} 중",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question,
             MessageBoxDefaultButton.Button2);
@@ -610,17 +671,54 @@ internal sealed class MainForm : Form
     internal static bool IsNonInteractiveCloseReason(CloseReason closeReason) =>
         closeReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing;
 
-    private FormulaRemovalRequest CreateRequest()
+    private DesktopOperation SelectedOperation =>
+        stylesOperationButton.Checked ? DesktopOperation.Styles : DesktopOperation.Values;
+
+    private OperationText CurrentText => OperationText.For(SelectedOperation);
+
+    private (DesktopBatchRunner Runner, string OutputDirectory, int FileCount) CreateRunner()
     {
+        string outputDirectory = outputDirectoryTextBox.Text.Trim();
+        if (SelectedOperation == DesktopOperation.Styles)
+        {
+            StyleCleanupRequest styles = new(inputWorkbooks.Items, outputDirectory);
+            return (
+                DesktopBatchJobs.CleanStyles(styles, StyleCleanupEngine.CleanAsync),
+                styles.OutputDirectory,
+                styles.InputPaths.Count);
+        }
+
         string[] patterns = excludedSheetsTextBox.Text.Split(
             [',', ';'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        return new FormulaRemovalRequest(
+        FormulaRemovalRequest values = new(
             inputWorkbooks.Items,
-            outputDirectoryTextBox.Text.Trim(),
+            outputDirectory,
             decimal.ToInt32(startRowInput.Value),
             patterns);
+        return (
+            DesktopBatchJobs.RemoveFormulas(values, FormulaRemovalEngine.ConvertAsync),
+            values.OutputDirectory,
+            values.InputPaths.Count);
+    }
+
+    // The scope settings (start row, excluded sheets) belong to formula removal only, so style
+    // mode hides them rather than leaving inputs that would be silently ignored.
+    private void ApplyOperation()
+    {
+        OperationText text = CurrentText;
+        bool showScope = SelectedOperation == DesktopOperation.Values;
+        titleLabel.Text = text.Title;
+        explanationLabel.Text = text.Explanation;
+        convertButton.Text = text.StartButton;
+        convertButton.AccessibleName = text.StartButton.Replace("&", string.Empty, StringComparison.Ordinal);
+        convertButton.AccessibleDescription = text.StartDescription;
+        toolTip.SetToolTip(convertButton, text.StartDescription);
+        settingsGroup.Text = showScope ? "3. 저장 위치와 범위" : "3. 저장 위치";
+        foreach (Control control in scopeControls)
+        {
+            control.Visible = showScope;
+        }
     }
 
     private void AddWorkbooks(IEnumerable<string> paths)
@@ -690,6 +788,8 @@ internal sealed class MainForm : Form
 
     private void SetProcessingState(bool processing)
     {
+        valuesOperationButton.Enabled = !processing;
+        stylesOperationButton.Enabled = !processing;
         addFilesButton.Enabled = !processing;
         fileListView.Enabled = !processing;
         outputDirectoryTextBox.Enabled = !processing;
@@ -709,7 +809,7 @@ internal sealed class MainForm : Form
             !string.IsNullOrWhiteSpace(outputDirectoryTextBox.Text);
     }
 
-    private void UpdateProgress(WorkbookProgress progress)
+    private void UpdateProgress(WorkbookProgress progress, OperationText text)
     {
         progressBar.Maximum = Math.Max(1, progress.TotalFiles);
         progressBar.Value = Math.Clamp(progress.CompletedFiles, 0, progressBar.Maximum);
@@ -718,10 +818,10 @@ internal sealed class MainForm : Form
         switch (progress.Stage)
         {
             case WorkbookStage.StartingFile:
-                SetStatus($"변환 중 · {progress.CompletedFiles + 1:N0}/{progress.TotalFiles:N0} · {fileName}");
+                SetStatus($"{text.Verb} 중 · {progress.CompletedFiles + 1:N0}/{progress.TotalFiles:N0} · {fileName}");
                 break;
             case WorkbookStage.ProcessingWorksheet:
-                SetStatus($"변환 중 · {progress.CompletedFiles + 1:N0}/{progress.TotalFiles:N0} · {fileName} · {progress.WorksheetName}");
+                SetStatus($"{text.Verb} 중 · {progress.CompletedFiles + 1:N0}/{progress.TotalFiles:N0} · {fileName} · {progress.WorksheetName}");
                 break;
             case WorkbookStage.CompletedFile:
                 SetStatus($"{progress.CompletedFiles:N0}/{progress.TotalFiles:N0}개 파일 처리 완료");
@@ -730,9 +830,10 @@ internal sealed class MainForm : Form
     }
 
     private void ShowBatchResult(
-        FormulaRemovalBatchResult result,
+        DesktopBatchResult result,
         bool canceled,
-        string outputDirectory)
+        string outputDirectory,
+        OperationText text)
     {
         progressBar.Value = Math.Clamp(result.Files.Count, 0, progressBar.Maximum);
 
@@ -741,19 +842,19 @@ internal sealed class MainForm : Form
         MessageBoxIcon icon;
         if (canceled)
         {
-            caption = "변환 취소됨";
+            caption = $"{text.Verb} 취소됨";
             icon = MessageBoxIcon.Information;
             SetStatus($"취소됨 · 완료된 출력 {result.SucceededCount:N0}개");
         }
         else if (result.FailedCount > 0 || hasWarnings)
         {
-            caption = "변환 결과 확인";
+            caption = $"{text.Verb} 결과 확인";
             icon = MessageBoxIcon.Warning;
             SetStatus($"완료 · 성공 {result.SucceededCount:N0}개 · 실패 {result.FailedCount:N0}개");
         }
         else
         {
-            caption = "변환 완료";
+            caption = $"{text.Verb} 완료";
             icon = MessageBoxIcon.Information;
             SetStatus($"완료 · {result.SucceededCount:N0}개 새 파일 저장");
         }
@@ -783,12 +884,14 @@ internal sealed class MainForm : Form
 
     private void ShowRequestError(string technicalMessage)
     {
-        SetStatus("파일 목록, 출력 폴더 또는 시작 행을 확인하세요.");
+        SetStatus(SelectedOperation == DesktopOperation.Values
+            ? "파일 목록, 출력 폴더 또는 시작 행을 확인하세요."
+            : "파일 목록과 출력 폴더를 확인하세요.");
         MessageBox.Show(
             this,
-            "변환 설정을 확인해 주세요.\n\n원본 파일을 한 개 이상 추가하고 유효한 출력 폴더를 입력하세요.\n\n" +
+            "설정을 확인해 주세요.\n\n원본 파일을 한 개 이상 추가하고 유효한 출력 폴더를 입력하세요.\n\n" +
                 LimitText(technicalMessage, 500),
-            "변환 설정 확인",
+            "설정 확인",
             MessageBoxButtons.OK,
             MessageBoxIcon.Warning);
     }
@@ -845,4 +948,33 @@ internal sealed class MainForm : Form
     {
         return text.Length <= maximumLength ? text : text[..maximumLength] + "…";
     }
+}
+
+/// <summary>Wording that depends on the selected operation.</summary>
+internal sealed record OperationText(
+    string Verb,
+    string VerbObject,
+    string Title,
+    string Explanation,
+    string StartButton,
+    string StartDescription)
+{
+    private static readonly OperationText Values = new(
+        "변환",
+        "변환을",
+        "수식을 마지막 저장 값으로 바꾸기",
+        "원본 파일은 변경하지 않습니다. Excel이 마지막으로 저장한 계산값만 사용하며, 이 앱에서 수식을 다시 계산하지 않습니다.",
+        "값으로 변환(&C)",
+        "선택한 파일의 수식을 마지막 저장 값으로 바꿉니다.");
+
+    private static readonly OperationText Styles = new(
+        "정리",
+        "정리를",
+        "사용하지 않는 스타일 정리",
+        "원본 파일은 변경하지 않습니다. 쓰지 않는 셀 스타일과 셀 서식을 지우고 같은 서식을 합치며, 셀 모양은 그대로입니다.",
+        "정리 시작(&C)",
+        "선택한 파일에서 사용하지 않는 스타일과 셀 서식을 정리합니다.");
+
+    public static OperationText For(DesktopOperation operation) =>
+        operation == DesktopOperation.Styles ? Styles : Values;
 }

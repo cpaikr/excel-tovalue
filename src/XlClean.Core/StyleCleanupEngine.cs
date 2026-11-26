@@ -131,6 +131,19 @@ public static class StyleCleanupEngine
     /// </summary>
     public const int FormatRecordLimit = 0xFF96;
 
+    /// <summary>
+    /// Phrase in the warning for a macro workbook that lost custom styles, whose first number is
+    /// the removed-style count. The desktop app recognizes and translates both warnings by their
+    /// phrase and first number, so keep both stable.
+    /// </summary>
+    public const string MacroStyleWarningPhrase = "a macro that applies a style by name";
+
+    /// <summary>
+    /// Phrase in the warning for a cleaned workbook still over <see cref="FormatRecordLimit"/>,
+    /// whose first number is the remaining record count.
+    /// </summary>
+    public const string FormatLimitWarningPhrase = "too many different cell formats";
+
     private const string VbaProjectRelationship =
         "http://schemas.microsoft.com/office/2006/relationships/vbaProject";
 
@@ -192,7 +205,7 @@ public static class StyleCleanupEngine
         {
             warnings.Add(
                 $"The workbook has macros and {removedCustomStyles} unused custom cell styles were removed; " +
-                "a macro that applies a style by name may no longer find it.");
+                $"{MacroStyleWarningPhrase} may no longer find it.");
         }
 
         int formatRecords = plan.KeptCellFormatCount + plan.CellStyleFormatMap.Count(index => index is not null);
@@ -200,7 +213,7 @@ public static class StyleCleanupEngine
         {
             warnings.Add(
                 $"The cleaned workbook still has {formatRecords} cell and style formats, more than the " +
-                $"{FormatRecordLimit} Excel supports; it may still report too many different cell formats.");
+                $"{FormatRecordLimit} Excel supports; it may still report {FormatLimitWarningPhrase}.");
         }
 
         return warnings.AsReadOnly();

@@ -8,17 +8,17 @@ using XlClean.Core;
 public sealed class DesktopConversionControllerTests
 {
     [TestMethod]
-    public async Task CompletedConversionReturnsResultAndResetsState()
+    public async Task CompletedBatchReturnsResultAndResetsState()
     {
-        FormulaRemovalBatchResult expected = new([Success("Book.xlsx", "Output.xlsx")]);
-        using DesktopConversionController controller = new((_, progress, cancellationToken) =>
+        DesktopBatchResult expected = new([Success("Book.xlsx", "Output.xlsx")]);
+        using DesktopConversionController controller = new();
+
+        DesktopConversionOutcome outcome = await controller.RunAsync((progress, cancellationToken) =>
         {
             Assert.IsNull(progress);
             Assert.IsFalse(cancellationToken.IsCancellationRequested);
             return Task.FromResult(expected);
         });
-
-        DesktopConversionOutcome outcome = await controller.RunAsync(CreateRequest());
 
         Assert.AreSame(expected, outcome.Result);
         Assert.IsFalse(outcome.WasCanceled);
@@ -30,24 +30,23 @@ public sealed class DesktopConversionControllerTests
     [TestMethod]
     public async Task CancellationRequestIsIdempotentAndReturnsPartialResult()
     {
-        TaskCompletionSource<bool> started = new(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        FormulaRemovalBatchResult partial = new([Success("First.xlsx", "First-output.xlsx")]);
-        using DesktopConversionController controller = new(async (_, _, cancellationToken) =>
+        TaskCompletionSource<bool> started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        DesktopBatchResult partial = new([Success("First.xlsx", "First-output.xlsx")]);
+        using DesktopConversionController controller = new();
+
+        Task<DesktopConversionOutcome> pending = controller.RunAsync(async (_, cancellationToken) =>
         {
             started.SetResult(true);
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                return new FormulaRemovalBatchResult([]);
+                return DesktopBatchResult.Empty;
             }
             catch (OperationCanceledException exception)
             {
-                throw new FormulaRemovalCanceledException(partial, cancellationToken, exception);
+                throw new DesktopBatchCanceledException(partial, exception);
             }
         });
-
-        Task<DesktopConversionOutcome> pending = controller.RunAsync(CreateRequest());
         await started.Task;
 
         Assert.IsTrue(controller.IsRunning);
@@ -66,16 +65,15 @@ public sealed class DesktopConversionControllerTests
     [TestMethod]
     public async Task PlainCancellationProducesAnEmptyCanceledResult()
     {
-        TaskCompletionSource<bool> started = new(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        using DesktopConversionController controller = new(async (_, _, cancellationToken) =>
+        TaskCompletionSource<bool> started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using DesktopConversionController controller = new();
+
+        Task<DesktopConversionOutcome> pending = controller.RunAsync(async (_, cancellationToken) =>
         {
             started.SetResult(true);
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            return new FormulaRemovalBatchResult([]);
+            return DesktopBatchResult.Empty;
         });
-
-        Task<DesktopConversionOutcome> pending = controller.RunAsync(CreateRequest());
         await started.Task;
         controller.RequestCancellation();
 
@@ -89,11 +87,11 @@ public sealed class DesktopConversionControllerTests
     [TestMethod]
     public async Task UnexpectedFailureBecomesARecoverableOutcome()
     {
-        InvalidOperationException expected = new("broken converter");
-        using DesktopConversionController controller = new((_, _, _) =>
-            Task.FromException<FormulaRemovalBatchResult>(expected));
+        InvalidOperationException expected = new("broken engine");
+        using DesktopConversionController controller = new();
 
-        DesktopConversionOutcome outcome = await controller.RunAsync(CreateRequest());
+        DesktopConversionOutcome outcome = await controller.RunAsync((_, _) =>
+            Task.FromException<DesktopBatchResult>(expected));
 
         Assert.AreSame(expected, outcome.Failure);
         Assert.IsFalse(outcome.WasCanceled);
@@ -102,25 +100,23 @@ public sealed class DesktopConversionControllerTests
     }
 
     [TestMethod]
-    public async Task ConcurrentConversionIsRejectedWithoutReplacingTheActiveOne()
+    public async Task ConcurrentBatchIsRejectedWithoutReplacingTheActiveOne()
     {
-        TaskCompletionSource<bool> started = new(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource<FormulaRemovalBatchResult> finish = new(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        using DesktopConversionController controller = new(async (_, _, _) =>
+        TaskCompletionSource<bool> started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<DesktopBatchResult> finish = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using DesktopConversionController controller = new();
+
+        Task<DesktopConversionOutcome> first = controller.RunAsync(async (_, _) =>
         {
             started.SetResult(true);
             return await finish.Task;
         });
-
-        Task<DesktopConversionOutcome> first = controller.RunAsync(CreateRequest());
         await started.Task;
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            controller.RunAsync(CreateRequest()));
+            controller.RunAsync((_, _) => Task.FromResult(DesktopBatchResult.Empty)));
 
-        FormulaRemovalBatchResult expected = new([Success("Book.xlsx", "Output.xlsx")]);
+        DesktopBatchResult expected = new([Success("Book.xlsx", "Output.xlsx")]);
         finish.SetResult(expected);
         DesktopConversionOutcome outcome = await first;
 
@@ -128,18 +124,104 @@ public sealed class DesktopConversionControllerTests
         Assert.IsFalse(controller.IsRunning);
     }
 
-    private static FormulaRemovalRequest CreateRequest() =>
-        new(["Book.xlsx"], Path.GetTempPath());
+    [TestMethod]
+    public async Task FormulaRemovalResultsAndCancellationMapToTheDesktopShape()
+    {
+        FormulaRemovalRequest request = new(["Book.xlsx"], Path.GetTempPath());
+        FormulaRemovalBatchResult partial = new(
+        [
+            new FormulaRemovalFileResult(
+                "Book.xlsx",
+                "Book_수식제거.xlsx",
+                WorkbookFailureKind.None,
+                null,
+                3,
+                1,
+                0,
+                0,
+                ["manual calculation"]),
+        ]);
+        using DesktopConversionController controller = new();
 
-    private static FormulaRemovalFileResult Success(string inputPath, string outputPath) =>
-        new(
-            inputPath,
-            outputPath,
-            WorkbookFailureKind.None,
-            null,
-            1,
-            1,
-            0,
-            0,
-            Array.Empty<string>());
+        DesktopConversionOutcome outcome = await controller.RunAsync(DesktopBatchJobs.RemoveFormulas(
+            request,
+            (actual, _, cancellationToken) =>
+            {
+                Assert.AreSame(request, actual);
+                throw new FormulaRemovalCanceledException(partial, cancellationToken);
+            }));
+
+        Assert.IsTrue(outcome.WasCanceled);
+        DesktopFileResult file = outcome.Result.Files.Single();
+        Assert.AreEqual("Book_수식제거.xlsx", file.OutputPath);
+        Assert.IsNull(file.Changes);
+        Assert.AreEqual("manual calculation", file.Warnings.Single());
+    }
+
+    [TestMethod]
+    public async Task StyleCleanupResultsKeepTheirChanges()
+    {
+        StyleCleanupRequest request = new(["Book.xlsx", "Bad.xlsx"], Path.GetTempPath());
+        StyleCleanupChanges changes = new(10, 2, 8, 3, 1);
+        StyleCleanupBatchResult result = new(
+        [
+            new StyleCleanupFileResult(
+                "Book.xlsx",
+                "Book_스타일정리.xlsx",
+                WorkbookFailureKind.None,
+                null,
+                changes,
+                Array.Empty<string>()),
+            new StyleCleanupFileResult(
+                "Bad.xlsx",
+                null,
+                WorkbookFailureKind.UnsupportedWorkbookContent,
+                "macro sheet",
+                null,
+                Array.Empty<string>()),
+        ]);
+        using DesktopConversionController controller = new();
+
+        DesktopConversionOutcome outcome = await controller.RunAsync(DesktopBatchJobs.CleanStyles(
+            request,
+            (actual, _, _) =>
+            {
+                Assert.AreSame(request, actual);
+                return Task.FromResult(result);
+            }));
+
+        Assert.IsFalse(outcome.WasCanceled);
+        Assert.AreEqual(1, outcome.Result.SucceededCount);
+        Assert.AreEqual(1, outcome.Result.FailedCount);
+        Assert.AreSame(changes, outcome.Result.Files[0].Changes);
+        Assert.AreEqual(WorkbookFailureKind.UnsupportedWorkbookContent, outcome.Result.Files[1].FailureKind);
+        Assert.AreEqual("macro sheet", outcome.Result.Files[1].ErrorMessage);
+    }
+
+    [TestMethod]
+    public async Task StyleCleanupCancellationKeepsCompletedFiles()
+    {
+        StyleCleanupRequest request = new(["Book.xlsx"], Path.GetTempPath());
+        StyleCleanupBatchResult partial = new(
+        [
+            new StyleCleanupFileResult(
+                "Book.xlsx",
+                "Book_스타일정리.xlsx",
+                WorkbookFailureKind.None,
+                null,
+                new StyleCleanupChanges(3, 1, 3, 1, 0),
+                Array.Empty<string>()),
+        ]);
+        using DesktopConversionController controller = new();
+
+        DesktopConversionOutcome outcome = await controller.RunAsync(DesktopBatchJobs.CleanStyles(
+            request,
+            (_, _, cancellationToken) => throw new StyleCleanupCanceledException(partial, cancellationToken)));
+
+        Assert.IsTrue(outcome.WasCanceled);
+        Assert.AreEqual("Book_스타일정리.xlsx", outcome.Result.Files.Single().OutputPath);
+    }
+
+    private static DesktopFileResult Success(string inputPath, string outputPath) =>
+        new(inputPath, outputPath, WorkbookFailureKind.None, null, null, Array.Empty<string>());
 }
