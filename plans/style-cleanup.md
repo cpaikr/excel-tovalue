@@ -82,7 +82,8 @@ reachable from cells and rewrites indices to a compact numbering.
    id; custom formats are keyed by format code. A built-in id is never equal
    to a custom code, even when the text looks the same.
 3. **Used named styles.** A `cellStyleXfs` entry is used when a surviving cell
-   format references it through `xfId`, when it is index 0, or when a kept
+   format references it through `xfId` (an absent `xfId` counts as 0, as Excel
+   reads it), when it is index 0, or when a kept
    `cellStyles` entry points to it. A `cellStyles` entry is kept when it is
    built-in (any `builtinId`, including Normal at `builtinId` 0), when its
    `cellStyleXfs` entry is used, or when a table names it: `.xlsx`

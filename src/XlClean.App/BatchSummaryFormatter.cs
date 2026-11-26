@@ -230,6 +230,8 @@ internal static class BatchSummaryFormatter
                 "파일이 열려 있지 않은지와 파일·출력 폴더의 읽기/쓰기 권한을 확인하세요.",
             WorkbookFailureKind.Unexpected =>
                 "다시 시도하고, 문제가 계속되면 아래 세부 정보를 기록해 주세요.",
+            WorkbookFailureKind.UnsupportedWorkbookContent =>
+                "이 파일에는 지원하지 않는 구성 요소가 있어 안전하게 처리할 수 없습니다. 원본을 그대로 사용하세요.",
             _ => "아래 세부 정보를 확인한 뒤 다시 시도하세요.",
         };
 

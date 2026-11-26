@@ -357,6 +357,7 @@ internal static class CliApplication
             WorkbookFailureKind.InvalidWorkbook => "invalid-workbook",
             WorkbookFailureKind.FileAccess => "file-access",
             WorkbookFailureKind.Unexpected => "unexpected",
+            WorkbookFailureKind.UnsupportedWorkbookContent => "unsupported-workbook-content",
             _ => throw new ArgumentOutOfRangeException(nameof(failureKind), failureKind, null),
         };
 
