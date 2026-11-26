@@ -269,7 +269,7 @@ public static class FormulaRemovalEngine
                             }
                             else if (rowNumber >= startRow && cell.CellFormula is not null)
                             {
-                                if (cell.CellValue is null)
+                                if (!HasCachedValue(cell))
                                 {
                                     string cellReference = cell.CellReference?.Value ?? $"row {rowNumber}";
                                     throw new MissingCachedValueException(sheetName, cellReference);
@@ -461,6 +461,26 @@ public static class FormulaRemovalEngine
         }
 
         return (firstCell, lastCell, firstRow, lastRow);
+    }
+
+    /// <summary>
+    /// A formula cell has a cached result when it has a value element, and that value is not
+    /// empty unless the result is text.
+    /// </summary>
+    /// <remarks>
+    /// Writers such as openpyxl emit an empty <c>&lt;v&gt;&lt;/v&gt;</c> for formulas they never
+    /// calculated. For a number, boolean, or error cell that is no result at all, and keeping it
+    /// would silently blank the cell. Excel saves a formula that returns "" as <c>t="str"</c> with
+    /// an empty value, which is a real result.
+    /// </remarks>
+    private static bool HasCachedValue(Cell cell)
+    {
+        if (cell.CellValue is not { } value)
+        {
+            return false;
+        }
+
+        return value.Text.Length > 0 || cell.DataType?.Value == CellValues.String;
     }
 
     private static uint GetRowIndex(OpenXmlReader reader)
