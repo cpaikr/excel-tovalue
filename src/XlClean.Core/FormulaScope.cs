@@ -53,7 +53,8 @@ internal sealed class FormulaRangeBoundaryException(
     string owner,
     string formulaRange,
     int startRow)
-    : Exception(
+    : WorkbookFailureException(
+        WorkbookFailureKind.FormulaRangeCrossesBoundary,
         $"Worksheet '{sheetName}', '{owner}' owns a {formulaKind} over range '{formulaRange}', " +
         $"which crosses start row {startRow}. Choose row 1 or a row " +
         "after the formula range.");

@@ -176,7 +176,7 @@ public sealed class XlsbFormulaRemovalTests
 
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath, startRow: 3, outputDirectory);
 
-        Assert.AreEqual(FormulaRemovalFailureKind.FormulaRangeCrossesBoundary, result.FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.FormulaRangeCrossesBoundary, result.FailureKind);
         StringAssert.Contains(result.ErrorMessage, kind);
         StringAssert.Contains(result.ErrorMessage, "C2:C4");
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
@@ -240,7 +240,7 @@ public sealed class XlsbFormulaRemovalTests
 
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath);
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
     }
 
     [TestMethod]
@@ -264,7 +264,7 @@ public sealed class XlsbFormulaRemovalTests
 
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath);
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
     }
 
     [TestMethod]
@@ -311,7 +311,7 @@ public sealed class XlsbFormulaRemovalTests
 
         Assert.IsTrue(above.Succeeded, above.ErrorMessage);
         CollectionAssert.AreEqual(tableBefore, ReadPart(above.OutputPath!, "/xl/tables/table1.bin"));
-        Assert.AreEqual(FormulaRemovalFailureKind.FormulaRangeCrossesBoundary, crossing.FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.FormulaRangeCrossesBoundary, crossing.FailureKind);
         StringAssert.Contains(crossing.ErrorMessage, "Sales");
         StringAssert.Contains(crossing.ErrorMessage, "A1:B4");
     }
@@ -342,7 +342,7 @@ public sealed class XlsbFormulaRemovalTests
 
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath);
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, result.FailureKind);
     }
 
     [TestMethod]
@@ -355,7 +355,7 @@ public sealed class XlsbFormulaRemovalTests
 
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath, outputDirectory: outputDirectory);
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, result.FailureKind);
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
 
@@ -371,7 +371,7 @@ public sealed class XlsbFormulaRemovalTests
 
         FormulaRemovalFileResult result = await ConvertSingleAsync(inputPath, outputDirectory: outputDirectory);
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, result.FailureKind, result.ErrorMessage);
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
 

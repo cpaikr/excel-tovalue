@@ -19,7 +19,7 @@ public sealed class BatchSummaryFormatterTests
             Success(@"C:\input\Macro.xlsm", @"C:\output\Macro_수식제거.xlsm"),
             Failure(
                 @"C:\input\Missing.xlsx",
-                FormulaRemovalFailureKind.MissingCachedValue,
+                WorkbookFailureKind.MissingCachedValue,
                 "Worksheet 'Data', cell 'A1' has no cached value."),
         ]);
 
@@ -97,7 +97,7 @@ public sealed class BatchSummaryFormatterTests
                 [$"warning {index}"]));
             files.Add(Failure(
                 $"Bad{index}.xlsx",
-                FormulaRemovalFailureKind.InvalidWorkbook,
+                WorkbookFailureKind.InvalidWorkbook,
                 $"error {index}"));
         }
 
@@ -116,14 +116,14 @@ public sealed class BatchSummaryFormatterTests
     }
 
     [TestMethod]
-    [DataRow(FormulaRemovalFailureKind.InvalidInput, "파일 경로와 .xlsx/.xlsm/.xlsb 확장자")]
-    [DataRow(FormulaRemovalFailureKind.MissingCachedValue, "수식을 다시 계산")]
-    [DataRow(FormulaRemovalFailureKind.FormulaRangeCrossesBoundary, "시작 행을 1로")]
-    [DataRow(FormulaRemovalFailureKind.InvalidWorkbook, "Excel에서 정상적으로 열리는지")]
-    [DataRow(FormulaRemovalFailureKind.FileAccess, "읽기/쓰기 권한")]
-    [DataRow(FormulaRemovalFailureKind.Unexpected, "문제가 계속되면")]
+    [DataRow(WorkbookFailureKind.InvalidInput, "파일 경로와 .xlsx/.xlsm/.xlsb 확장자")]
+    [DataRow(WorkbookFailureKind.MissingCachedValue, "수식을 다시 계산")]
+    [DataRow(WorkbookFailureKind.FormulaRangeCrossesBoundary, "시작 행을 1로")]
+    [DataRow(WorkbookFailureKind.InvalidWorkbook, "Excel에서 정상적으로 열리는지")]
+    [DataRow(WorkbookFailureKind.FileAccess, "읽기/쓰기 권한")]
+    [DataRow(WorkbookFailureKind.Unexpected, "문제가 계속되면")]
     public void EveryFailureKindHasRecoveryGuidance(
-        FormulaRemovalFailureKind failureKind,
+        WorkbookFailureKind failureKind,
         string expectedGuidance)
     {
         FormulaRemovalBatchResult result = new(
@@ -143,7 +143,7 @@ public sealed class BatchSummaryFormatterTests
         [
             Failure(
                 longPath,
-                FormulaRemovalFailureKind.Unexpected,
+                WorkbookFailureKind.Unexpected,
                 "first\r\nsecond\t" + longTail + "UNBOUNDED_TAIL"),
         ]);
 
@@ -176,7 +176,7 @@ public sealed class BatchSummaryFormatterTests
         new(
             inputPath,
             outputPath,
-            FormulaRemovalFailureKind.None,
+            WorkbookFailureKind.None,
             null,
             3,
             2,
@@ -186,7 +186,7 @@ public sealed class BatchSummaryFormatterTests
 
     private static FormulaRemovalFileResult Failure(
         string inputPath,
-        FormulaRemovalFailureKind failureKind,
+        WorkbookFailureKind failureKind,
         string message) =>
         new(
             inputPath,

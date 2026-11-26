@@ -11,7 +11,7 @@ using XlClean.Core;
 
 internal delegate Task<FormulaRemovalBatchResult> FormulaRemovalConverter(
     FormulaRemovalRequest request,
-    IProgress<FormulaRemovalProgress>? progress,
+    IProgress<WorkbookProgress>? progress,
     CancellationToken cancellationToken);
 
 internal static class CliApplication
@@ -348,15 +348,15 @@ internal static class CliApplication
 
     private static string FormatCommand(CliCommand command) => CommandLineParser.NameOf(command);
 
-    private static string FormatFailureKind(FormulaRemovalFailureKind failureKind) =>
+    private static string FormatFailureKind(WorkbookFailureKind failureKind) =>
         failureKind switch
         {
-            FormulaRemovalFailureKind.InvalidInput => "invalid-input",
-            FormulaRemovalFailureKind.MissingCachedValue => "missing-cached-value",
-            FormulaRemovalFailureKind.FormulaRangeCrossesBoundary => "formula-range-crosses-boundary",
-            FormulaRemovalFailureKind.InvalidWorkbook => "invalid-workbook",
-            FormulaRemovalFailureKind.FileAccess => "file-access",
-            FormulaRemovalFailureKind.Unexpected => "unexpected",
+            WorkbookFailureKind.InvalidInput => "invalid-input",
+            WorkbookFailureKind.MissingCachedValue => "missing-cached-value",
+            WorkbookFailureKind.FormulaRangeCrossesBoundary => "formula-range-crosses-boundary",
+            WorkbookFailureKind.InvalidWorkbook => "invalid-workbook",
+            WorkbookFailureKind.FileAccess => "file-access",
+            WorkbookFailureKind.Unexpected => "unexpected",
             _ => throw new ArgumentOutOfRangeException(nameof(failureKind), failureKind, null),
         };
 

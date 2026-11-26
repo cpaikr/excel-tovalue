@@ -5,7 +5,7 @@ using XlClean.Core;
 
 internal delegate Task<FormulaRemovalBatchResult> DesktopFormulaRemovalConverter(
     FormulaRemovalRequest request,
-    IProgress<FormulaRemovalProgress>? progress,
+    IProgress<WorkbookProgress>? progress,
     CancellationToken cancellationToken);
 
 /// <summary>
@@ -37,7 +37,7 @@ internal sealed class DesktopConversionController(
         Justification = "The desktop event loop must render unexpected converter failures instead of terminating.")]
     public async Task<DesktopConversionOutcome> RunAsync(
         FormulaRemovalRequest request,
-        IProgress<FormulaRemovalProgress>? progress = null)
+        IProgress<WorkbookProgress>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (cancellation is not null)

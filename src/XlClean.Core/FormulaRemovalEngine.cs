@@ -1,10 +1,6 @@
 namespace XlClean.Core;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.IO.Packaging;
-using System.Security;
-using System.Xml;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -13,19 +9,13 @@ using DocumentFormat.OpenXml.Spreadsheet;
 /// Converts worksheet cell formulas to their last saved cached values.
 /// </summary>
 /// <remarks>
-/// The module never modifies an input workbook or overwrites an existing
-/// output. Each file is transformed in a sibling temporary file and published
-/// with a same-volume move only after the package can be reopened.
+/// The safety guarantees (no modified input, no overwritten output, verified atomic publication,
+/// no partial output on failure) belong to <see cref="WorkbookBatchPipeline"/>. This module
+/// supplies the formula rewrite for each format.
 /// </remarks>
 public static class FormulaRemovalEngine
 {
-    private const long MaximumCharactersInPart = 1_073_741_824;
     private const int CopyBufferSize = 1024 * 1024;
-    private static readonly string[] SupportedExtensions = [".xlsx", ".xlsm", ".xlsb"];
-    private static readonly StringComparer PathComparer =
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
 
     /// <summary>
     /// Converts all requested workbooks sequentially on a worker thread.
@@ -44,7 +34,7 @@ public static class FormulaRemovalEngine
     /// </exception>
     public static Task<FormulaRemovalBatchResult> ConvertAsync(
         FormulaRemovalRequest request,
-        IProgress<FormulaRemovalProgress>? progress = null,
+        IProgress<WorkbookProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -56,208 +46,60 @@ public static class FormulaRemovalEngine
 
     private static FormulaRemovalBatchResult ConvertBatch(
         FormulaRemovalRequest request,
-        IProgress<FormulaRemovalProgress>? progress,
+        IProgress<WorkbookProgress>? progress,
         CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        string outputDirectory = request.OutputDirectory;
-        Directory.CreateDirectory(outputDirectory);
-
-        HashSet<string> inputPaths = GetNormalizedInputPaths(request.InputPaths);
-        HashSet<string> seenInputs = new(PathComparer);
-        OutputPathAllocator outputPaths = new(outputDirectory, inputPaths);
-        List<FormulaRemovalFileResult> results = new(request.InputPaths.Count);
-
         try
         {
-            for (int index = 0; index < request.InputPaths.Count; index++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                string inputPath = request.InputPaths[index];
-                progress?.Report(new FormulaRemovalProgress(
-                    index,
-                    request.InputPaths.Count,
-                    inputPath,
-                    null,
-                    FormulaRemovalStage.StartingFile));
-
-                FormulaRemovalFileResult result = ConvertFile(
-                    inputPath,
-                    request,
-                    outputPaths,
-                    seenInputs,
-                    index,
-                    progress,
-                    cancellationToken);
-
-                results.Add(result);
-                progress?.Report(new FormulaRemovalProgress(
-                    index + 1,
-                    request.InputPaths.Count,
-                    inputPath,
-                    null,
-                    FormulaRemovalStage.CompletedFile));
-            }
+            return ToBatchResult(WorkbookBatchPipeline.Run(
+                request.InputPaths,
+                request.OutputDirectory,
+                new FormulaRemovalOperation(request),
+                progress,
+                cancellationToken));
         }
-        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        catch (WorkbookBatchCanceledException<ConversionStatistics> exception)
         {
             throw new FormulaRemovalCanceledException(
-                new FormulaRemovalBatchResult(results),
-                cancellationToken,
-                exception);
+                ToBatchResult(exception.Completed),
+                exception.CancellationToken,
+                exception.InnerException);
         }
-
-        return new FormulaRemovalBatchResult(results);
     }
 
-    [SuppressMessage(
-        "Design",
-        "CA1031:Do not catch general exception types",
-        Justification = "A batch must isolate unexpected failures to the affected workbook and continue safely.")]
-    private static FormulaRemovalFileResult ConvertFile(
-        string requestedInputPath,
-        FormulaRemovalRequest request,
-        OutputPathAllocator outputPaths,
-        HashSet<string> seenInputs,
-        int completedFiles,
-        IProgress<FormulaRemovalProgress>? progress,
-        CancellationToken cancellationToken)
-    {
-        string? temporaryPath = null;
-
-        try
-        {
-            string inputPath = Path.GetFullPath(requestedInputPath);
-            ValidateInput(inputPath);
-
-            if (!seenInputs.Add(inputPath))
-            {
-                return Failure(
-                    requestedInputPath,
-                    FormulaRemovalFailureKind.InvalidInput,
-                    "The same input workbook was requested more than once.");
-            }
-
-            string outputPath = outputPaths.Allocate(inputPath);
-            temporaryPath = CreateTemporaryPath(outputPath);
-
-            CopyWithCancellation(inputPath, temporaryPath, cancellationToken);
-            bool isBinaryWorkbook = IsBinaryWorkbookPath(inputPath);
-            ConversionStatistics statistics = isBinaryWorkbook
-                ? XlsbFormulaRemover.Transform(
-                    temporaryPath,
-                    requestedInputPath,
-                    request,
-                    completedFiles,
-                    progress,
-                    cancellationToken)
-                : TransformWorkbook(
-                    temporaryPath,
-                    requestedInputPath,
-                    request,
-                    completedFiles,
-                    progress,
-                    cancellationToken);
-
-            cancellationToken.ThrowIfCancellationRequested();
-            if (isBinaryWorkbook)
-            {
-                XlsbFormulaRemover.Verify(temporaryPath, cancellationToken);
-            }
-            else
-            {
-                VerifyPackageCanReopen(temporaryPath);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            outputPath = PublishWithUniqueName(
-                temporaryPath,
-                outputPath,
-                inputPath,
-                outputPaths,
-                cancellationToken);
-            temporaryPath = null;
-
-            return new FormulaRemovalFileResult(
-                requestedInputPath,
-                outputPath,
-                FormulaRemovalFailureKind.None,
-                null,
+    private static FormulaRemovalBatchResult ToBatchResult(
+        IReadOnlyList<WorkbookFileOutcome<ConversionStatistics>> outcomes) =>
+        new(outcomes.Select(outcome => outcome.Changes is { } statistics
+            ? new FormulaRemovalFileResult(
+                outcome.InputPath,
+                outcome.OutputPath,
+                outcome.FailureKind,
+                outcome.ErrorMessage,
                 statistics.RemovedFormulaCount,
                 statistics.ProcessedSheetCount,
                 statistics.ExcludedSheetCount,
                 statistics.RemovedTableFormulaDefinitionCount,
-                Array.AsReadOnly(statistics.Warnings.ToArray()));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (MissingCachedValueException exception)
-        {
-            return Failure(
-                requestedInputPath,
-                FormulaRemovalFailureKind.MissingCachedValue,
-                exception.Message);
-        }
-        catch (FormulaRangeBoundaryException exception)
-        {
-            return Failure(
-                requestedInputPath,
-                FormulaRemovalFailureKind.FormulaRangeCrossesBoundary,
-                exception.Message);
-        }
-        catch (Exception exception) when (
-            exception is ArgumentException or FileNotFoundException or NotSupportedException or
-                PathTooLongException or SecurityException)
-        {
-            return Failure(
-                requestedInputPath,
-                FormulaRemovalFailureKind.InvalidInput,
-                exception.Message);
-        }
-        catch (Exception exception) when (
-            exception is FileFormatException or InvalidDataException or OpenXmlPackageException or
-                XmlException or FormatException or InvalidOperationException or OverflowException)
-        {
-            return Failure(
-                requestedInputPath,
-                FormulaRemovalFailureKind.InvalidWorkbook,
-                exception.Message);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return Failure(
-                requestedInputPath,
-                FormulaRemovalFailureKind.FileAccess,
-                exception.Message);
-        }
-        catch (Exception exception)
-        {
-            return Failure(
-                requestedInputPath,
-                FormulaRemovalFailureKind.Unexpected,
-                exception.Message);
-        }
-        finally
-        {
-            TryDeleteTemporaryFile(temporaryPath);
-        }
-    }
+                Array.AsReadOnly(statistics.Warnings.ToArray()))
+            : new FormulaRemovalFileResult(
+                outcome.InputPath,
+                outcome.OutputPath,
+                outcome.FailureKind,
+                outcome.ErrorMessage,
+                0,
+                0,
+                0,
+                0,
+                Array.Empty<string>())));
 
     private static ConversionStatistics TransformWorkbook(
-        string workbookPath,
-        string inputPath,
+        WorkbookFile file,
         FormulaRemovalRequest request,
-        int completedFiles,
-        IProgress<FormulaRemovalProgress>? progress,
         CancellationToken cancellationToken)
     {
-        OpenSettings settings = CreateOpenSettings();
-        using SpreadsheetDocument document = SpreadsheetDocument.Open(workbookPath, true, settings);
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(
+            file.Path,
+            true,
+            OpenXmlWorkbook.CreateOpenSettings());
 
         WorkbookPart workbookPart = document.WorkbookPart ??
             throw new InvalidDataException("The package has no workbook part.");
@@ -308,12 +150,7 @@ public static class FormulaRemovalEngine
                 continue;
             }
 
-            progress?.Report(new FormulaRemovalProgress(
-                completedFiles,
-                request.InputPaths.Count,
-                inputPath,
-                sheetName,
-                FormulaRemovalStage.ProcessingWorksheet));
+            file.ReportWorksheet(sheetName);
 
             removedTableFormulaDefinitions += RewriteTableFormulaDefinitions(
                 worksheetPart,
@@ -323,7 +160,7 @@ public static class FormulaRemovalEngine
                 worksheetPart,
                 sheetName,
                 request.StartRow,
-                workbookPath,
+                file.Path,
                 cancellationToken);
             processedSheets++;
         }
@@ -484,7 +321,7 @@ public static class FormulaRemovalEngine
         }
         finally
         {
-            TryDeleteTemporaryFile(stagingPath);
+            WorkbookBatchPipeline.TryDeleteStagingFile(stagingPath);
         }
     }
 
@@ -669,201 +506,26 @@ public static class FormulaRemovalEngine
         throw new InvalidDataException("A worksheet cell has no usable row reference.");
     }
 
-    private static void ValidateInput(string inputPath)
+    /// <summary>Formula removal as a pipeline operation, dispatching on the workbook format.</summary>
+    private sealed class FormulaRemovalOperation(FormulaRemovalRequest request)
+        : IWorkbookOperation<ConversionStatistics>
     {
-        string extension = Path.GetExtension(inputPath);
-        if (!SupportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        public string OutputNameSuffix => "_수식제거";
+
+        public ConversionStatistics Transform(WorkbookFile file, CancellationToken cancellationToken) =>
+            file.Format == WorkbookFormat.Binary
+                ? XlsbFormulaRemover.Transform(file, request, cancellationToken)
+                : TransformWorkbook(file, request, cancellationToken);
+
+        // The pipeline's reopen check covers what formula removal needs to prove.
+        public void Verify(WorkbookFile file, ConversionStatistics changes, CancellationToken cancellationToken)
         {
-            throw new ArgumentException(
-                $"Unsupported workbook extension '{extension}'. Use .xlsx, .xlsm, or .xlsb.",
-                nameof(inputPath));
-        }
-
-        if (!File.Exists(inputPath))
-        {
-            throw new FileNotFoundException("The input workbook does not exist.", inputPath);
-        }
-    }
-
-    private static bool IsBinaryWorkbookPath(string inputPath)
-    {
-        return Path.GetExtension(inputPath).Equals(".xlsb", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static HashSet<string> GetNormalizedInputPaths(IReadOnlyList<string> requestedPaths)
-    {
-        HashSet<string> paths = new(PathComparer);
-        foreach (string requestedPath in requestedPaths)
-        {
-            try
-            {
-                paths.Add(Path.GetFullPath(requestedPath));
-            }
-            catch (Exception exception) when (
-                exception is ArgumentException or NotSupportedException or PathTooLongException or SecurityException)
-            {
-                // The per-file conversion returns a precise invalid-input result.
-            }
-        }
-
-        return paths;
-    }
-
-    private static void CopyWithCancellation(
-        string inputPath,
-        string outputPath,
-        CancellationToken cancellationToken)
-    {
-        using FileStream input = new(
-            inputPath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            CopyBufferSize,
-            FileOptions.SequentialScan);
-        using FileStream output = new(
-            outputPath,
-            FileMode.CreateNew,
-            FileAccess.Write,
-            FileShare.None,
-            CopyBufferSize,
-            FileOptions.SequentialScan);
-
-        byte[] buffer = new byte[CopyBufferSize];
-        int bytesRead;
-        while ((bytesRead = input.Read(buffer, 0, buffer.Length)) > 0)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            output.Write(buffer, 0, bytesRead);
-        }
-
-        output.Flush(flushToDisk: true);
-    }
-
-    private static void VerifyPackageCanReopen(string workbookPath)
-    {
-        using SpreadsheetDocument document = SpreadsheetDocument.Open(
-            workbookPath,
-            false,
-            CreateOpenSettings());
-
-        if (document.WorkbookPart?.Workbook?.Sheets is null)
-        {
-            throw new InvalidDataException("The converted package has no readable sheets collection.");
-        }
-    }
-
-    private static OpenSettings CreateOpenSettings()
-    {
-        return new OpenSettings
-        {
-            AutoSave = false,
-            MaxCharactersInPart = MaximumCharactersInPart,
-        };
-    }
-
-    private static string CreateTemporaryPath(string outputPath)
-    {
-        string directory = Path.GetDirectoryName(outputPath)!;
-        string fileName = Path.GetFileNameWithoutExtension(outputPath);
-        string extension = Path.GetExtension(outputPath);
-        return Path.Combine(
-            directory,
-            $".xlclean-{fileName}-{Guid.NewGuid():N}.tmp{extension}");
-    }
-
-    private static string PublishWithUniqueName(
-        string temporaryPath,
-        string initialOutputPath,
-        string inputPath,
-        OutputPathAllocator outputPaths,
-        CancellationToken cancellationToken)
-    {
-        string outputPath = initialOutputPath;
-
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                File.Move(temporaryPath, outputPath, overwrite: false);
-                return outputPath;
-            }
-            catch (IOException) when (Path.Exists(outputPath))
-            {
-                outputPath = outputPaths.Allocate(inputPath);
-            }
-        }
-    }
-
-    private static FormulaRemovalFileResult Failure(
-        string inputPath,
-        FormulaRemovalFailureKind failureKind,
-        string message)
-    {
-        return new FormulaRemovalFileResult(
-            inputPath,
-            null,
-            failureKind,
-            message,
-            0,
-            0,
-            0,
-            0,
-            Array.Empty<string>());
-    }
-
-    private static void TryDeleteTemporaryFile(string? path)
-    {
-        if (string.IsNullOrEmpty(path))
-        {
-            return;
-        }
-
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // The uniquely named staging file is never a user file. A later
-            // process or antivirus lock may delay its removal.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // See the IOException rationale above.
-        }
-    }
-
-    private sealed class OutputPathAllocator(
-        string outputDirectory,
-        IEnumerable<string> inputPaths)
-    {
-        private readonly HashSet<string> reservedPaths = new(inputPaths, PathComparer);
-
-        public string Allocate(string inputPath)
-        {
-            string baseName = $"{Path.GetFileNameWithoutExtension(inputPath)}_수식제거";
-            string extension = Path.GetExtension(inputPath);
-
-            for (int sequence = 1; sequence < int.MaxValue; sequence++)
-            {
-                string suffix = sequence == 1 ? string.Empty : $" ({sequence})";
-                string candidate = Path.Combine(outputDirectory, $"{baseName}{suffix}{extension}");
-
-                if (!Path.Exists(candidate) && reservedPaths.Add(candidate))
-                {
-                    return candidate;
-                }
-            }
-
-            throw new IOException($"No available output name could be allocated for '{inputPath}'.");
         }
     }
 
     private sealed class MissingCachedValueException(string sheetName, string cellReference)
-        : Exception(
+        : WorkbookFailureException(
+            WorkbookFailureKind.MissingCachedValue,
             $"Worksheet '{sheetName}', cell '{cellReference}' has a formula but no cached value. " +
             "Open and recalculate the workbook in Excel, save it, and try again.");
 }

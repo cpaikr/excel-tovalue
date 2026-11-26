@@ -283,7 +283,7 @@ public sealed class CliApplicationTests
         FormulaRemovalBatchResult result = new(
         [
             SuccessfulFile("First.xlsx", "First_수식제거.xlsx"),
-            FailedFile("Second.xlsx", FormulaRemovalFailureKind.MissingCachedValue, "No cache."),
+            FailedFile("Second.xlsx", WorkbookFailureKind.MissingCachedValue, "No cache."),
         ]);
 
         Invocation invocation = await Invoke(
@@ -306,13 +306,13 @@ public sealed class CliApplicationTests
     }
 
     [TestMethod]
-    [DataRow(FormulaRemovalFailureKind.InvalidInput, "invalid-input")]
-    [DataRow(FormulaRemovalFailureKind.MissingCachedValue, "missing-cached-value")]
-    [DataRow(FormulaRemovalFailureKind.FormulaRangeCrossesBoundary, "formula-range-crosses-boundary")]
-    [DataRow(FormulaRemovalFailureKind.InvalidWorkbook, "invalid-workbook")]
-    [DataRow(FormulaRemovalFailureKind.FileAccess, "file-access")]
-    [DataRow(FormulaRemovalFailureKind.Unexpected, "unexpected")]
-    public async Task FailureKindsUseStableIdentifiers(FormulaRemovalFailureKind kind, string expected)
+    [DataRow(WorkbookFailureKind.InvalidInput, "invalid-input")]
+    [DataRow(WorkbookFailureKind.MissingCachedValue, "missing-cached-value")]
+    [DataRow(WorkbookFailureKind.FormulaRangeCrossesBoundary, "formula-range-crosses-boundary")]
+    [DataRow(WorkbookFailureKind.InvalidWorkbook, "invalid-workbook")]
+    [DataRow(WorkbookFailureKind.FileAccess, "file-access")]
+    [DataRow(WorkbookFailureKind.Unexpected, "unexpected")]
+    public async Task FailureKindsUseStableIdentifiers(WorkbookFailureKind kind, string expected)
     {
         Invocation invocation = await Invoke(
             ["values", "--output", "out", "Book.xlsx"],
@@ -338,7 +338,7 @@ public sealed class CliApplicationTests
                 new FormulaRemovalFileResult(
                     "A,\n\"\\😀한글.xlsx",
                     "out,\tBook.xlsx",
-                    FormulaRemovalFailureKind.None,
+                    WorkbookFailureKind.None,
                     null,
                     1234,
                     5,
@@ -455,7 +455,7 @@ public sealed class CliApplicationTests
 
     private static Task<FormulaRemovalBatchResult> UnexpectedConversion(
         FormulaRemovalRequest request,
-        IProgress<FormulaRemovalProgress>? progress,
+        IProgress<WorkbookProgress>? progress,
         CancellationToken cancellationToken) =>
         throw new AssertFailedException(
             $"Conversion was unexpectedly invoked for '{request.InputPaths[0]}'.");
@@ -467,7 +467,7 @@ public sealed class CliApplicationTests
         new(
             inputPath,
             outputPath,
-            FormulaRemovalFailureKind.None,
+            WorkbookFailureKind.None,
             null,
             3,
             2,
@@ -477,7 +477,7 @@ public sealed class CliApplicationTests
 
     private static FormulaRemovalFileResult FailedFile(
         string inputPath,
-        FormulaRemovalFailureKind failureKind,
+        WorkbookFailureKind failureKind,
         string message) =>
         new(
             inputPath,

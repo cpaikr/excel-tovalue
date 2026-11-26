@@ -21,80 +21,27 @@ internal static class XlsbFormulaRemover
     private const int CellLength = 8;
     private const int RowRangeLength = 16;
 
-    private const string BinaryWorkbookContentType =
-        "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
-    private const string OfficeDocumentRelationship =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
-    private const string WorksheetRelationship =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
     private const string CalculationChainRelationship =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
-    private const string TableRelationship =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
     private const string BinaryIndexRelationship =
         "http://schemas.microsoft.com/office/2006/relationships/xlBinaryIndex";
 
+    /// <remarks>
+    /// The pipeline reports package <see cref="ArgumentException"/>s from this method as an
+    /// invalid workbook.
+    /// </remarks>
     public static ConversionStatistics Transform(
-        string workbookPath,
-        string inputPath,
+        WorkbookFile file,
         FormulaRemovalRequest request,
-        int completedFiles,
-        IProgress<FormulaRemovalProgress>? progress,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return TransformPackage(
-                workbookPath,
-                inputPath,
-                request,
-                completedFiles,
-                progress,
-                cancellationToken);
-        }
-        catch (ArgumentException exception)
-        {
-            throw MalformedPackage(exception);
-        }
-    }
-
-    /// <summary>
-    /// Reopens the converted package and re-reads the framing of every workbook, worksheet, and table record.
-    /// </summary>
-    public static void Verify(string workbookPath, CancellationToken cancellationToken)
-    {
-        try
-        {
-            VerifyPackage(workbookPath, cancellationToken);
-        }
-        catch (ArgumentException exception)
-        {
-            throw MalformedPackage(exception);
-        }
-    }
-
-    /// <summary>
-    /// System.IO.Packaging reports malformed content types, part names, and relationship
-    /// targets with <see cref="ArgumentException"/>; those describe the workbook, not the request.
-    /// </summary>
-    private static InvalidDataException MalformedPackage(ArgumentException exception) =>
-        new($"The binary workbook package is malformed: {exception.Message}", exception);
-
-    private static ConversionStatistics TransformPackage(
-        string workbookPath,
-        string inputPath,
-        FormulaRemovalRequest request,
-        int completedFiles,
-        IProgress<FormulaRemovalProgress>? progress,
         CancellationToken cancellationToken)
     {
         using Package package = Package.Open(
-            workbookPath,
+            file.Path,
             FileMode.Open,
             FileAccess.ReadWrite,
             FileShare.None);
 
-        PackagePart workbookPart = GetWorkbookPart(package);
+        PackagePart workbookPart = XlsbPackage.GetWorkbookPart(package);
         WorkbookInfo workbook = ReadWorkbook(workbookPart);
 
         List<string> warnings = [];
@@ -114,7 +61,10 @@ internal static class XlsbFormulaRemover
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            PackagePart? sheetPart = GetRelatedPart(workbookPart, relationshipId, WorksheetRelationship);
+            PackagePart? sheetPart = XlsbPackage.GetRelatedPart(
+                workbookPart,
+                relationshipId,
+                XlsbPackage.WorksheetRelationship);
             if (sheetPart is null)
             {
                 continue;
@@ -126,14 +76,9 @@ internal static class XlsbFormulaRemover
                 continue;
             }
 
-            progress?.Report(new FormulaRemovalProgress(
-                completedFiles,
-                request.InputPaths.Count,
-                inputPath,
-                sheetName,
-                FormulaRemovalStage.ProcessingWorksheet));
+            file.ReportWorksheet(sheetName);
 
-            foreach (PackagePart tablePart in GetRelatedParts(sheetPart, TableRelationship))
+            foreach (PackagePart tablePart in XlsbPackage.GetRelatedParts(sheetPart, XlsbPackage.TableRelationship))
             {
                 removedTableFormulaDefinitions += RewriteTable(tablePart, sheetName, request.StartRow);
             }
@@ -143,14 +88,14 @@ internal static class XlsbFormulaRemover
                 sheetPart,
                 sheetName,
                 request.StartRow,
-                workbookPath,
+                file.Path,
                 cancellationToken);
             processedSheets++;
         }
 
         if (removedFormulas > 0 || removedTableFormulaDefinitions > 0)
         {
-            DeleteRelatedParts(package, workbookPart, CalculationChainRelationship);
+            XlsbPackage.DeleteRelatedParts(package, workbookPart, CalculationChainRelationship);
             RequestFullCalculationOnLoad(workbookPart);
         }
 
@@ -160,28 +105,6 @@ internal static class XlsbFormulaRemover
             excludedSheets,
             removedTableFormulaDefinitions,
             warnings);
-    }
-
-    private static void VerifyPackage(string workbookPath, CancellationToken cancellationToken)
-    {
-        using Package package = Package.Open(workbookPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        PackagePart workbookPart = GetWorkbookPart(package);
-        WorkbookInfo workbook = ReadWorkbook(workbookPart);
-
-        foreach ((string relationshipId, _) in workbook.Sheets)
-        {
-            PackagePart? sheetPart = GetRelatedPart(workbookPart, relationshipId, WorksheetRelationship);
-            if (sheetPart is null)
-            {
-                continue;
-            }
-
-            ReadAllRecords(sheetPart, cancellationToken);
-            foreach (PackagePart tablePart in GetRelatedParts(sheetPart, TableRelationship))
-            {
-                ReadAllRecords(tablePart, cancellationToken);
-            }
-        }
     }
 
     private static int RewriteWorksheet(
@@ -298,12 +221,12 @@ internal static class XlsbFormulaRemover
 
             // The binary index stores byte offsets into the original worksheet stream. It is an
             // optional load accelerator, so remove it rather than leave stale offsets.
-            DeleteRelatedParts(package, sheetPart, BinaryIndexRelationship);
+            XlsbPackage.DeleteRelatedParts(package, sheetPart, BinaryIndexRelationship);
             return removedFormulas;
         }
         finally
         {
-            TryDeleteFile(stagingPath);
+            WorkbookBatchPipeline.TryDeleteStagingFile(stagingPath);
         }
     }
 
@@ -390,7 +313,7 @@ internal static class XlsbFormulaRemover
 
     private static int RewriteTable(PackagePart tablePart, string sheetName, int startRow)
     {
-        List<Biff12Record> records = ReadAllRecords(tablePart, CancellationToken.None);
+        List<Biff12Record> records = XlsbPackage.ReadAllRecords(tablePart, CancellationToken.None);
         int listIndex = records.FindIndex(record => record.Type == RecordType.BeginList);
         if (listIndex < 0)
         {
@@ -506,7 +429,7 @@ internal static class XlsbFormulaRemover
 
     private static void RequestFullCalculationOnLoad(PackagePart workbookPart)
     {
-        List<Biff12Record> records = ReadAllRecords(workbookPart, CancellationToken.None);
+        List<Biff12Record> records = XlsbPackage.ReadAllRecords(workbookPart, CancellationToken.None);
         int index = records.FindIndex(record => record.Type == RecordType.CalculationProperties);
         if (index < 0)
         {
@@ -532,134 +455,20 @@ internal static class XlsbFormulaRemover
         }
     }
 
-    private static PackagePart GetWorkbookPart(Package package)
-    {
-        PackageRelationship relationship = package
-            .GetRelationshipsByType(OfficeDocumentRelationship)
-            .FirstOrDefault() ??
-            throw new InvalidDataException("The package has no workbook part.");
-        Uri partUri = PackUriHelper.ResolvePartUri(new Uri("/", UriKind.Relative), relationship.TargetUri);
-        if (!package.PartExists(partUri))
-        {
-            throw new InvalidDataException("The package has no workbook part.");
-        }
-
-        PackagePart part = package.GetPart(partUri);
-        if (!string.Equals(part.ContentType, BinaryWorkbookContentType, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException(
-                $"The .xlsb package contains a '{part.ContentType}' workbook, not an Excel binary workbook.");
-        }
-
-        return part;
-    }
-
     private static WorkbookInfo ReadWorkbook(PackagePart workbookPart)
     {
-        List<(string RelationshipId, string Name)> sheets = [];
+        List<Biff12Record> records = XlsbPackage.ReadAllRecords(workbookPart, CancellationToken.None);
         Biff12Record? calculationProperties = null;
-
-        foreach (Biff12Record record in ReadAllRecords(workbookPart, CancellationToken.None))
+        foreach (Biff12Record record in records)
         {
-            if (record.Type == RecordType.BundleSheet)
-            {
-                // BrtBundleSh: hsState (4), iTabID (4), strRelID, strName.
-                string relationshipId = record.ReadWideString(8, out int nameOffset) ??
-                    throw new InvalidDataException("A workbook sheet has no relationship id.");
-                string name = record.ReadWideString(nameOffset, out _) ??
-                    throw new InvalidDataException("A worksheet has no name.");
-                sheets.Add((relationshipId, name));
-            }
-            else if (record.Type == RecordType.CalculationProperties)
+            if (record.Type == RecordType.CalculationProperties)
             {
                 record.RequireLength(CalculationPropertiesLayout.FlagsOffset + sizeof(ushort));
                 calculationProperties = record;
             }
         }
 
-        if (sheets.Count == 0)
-        {
-            throw new InvalidDataException("The workbook has no sheets collection.");
-        }
-
-        return new WorkbookInfo(sheets, calculationProperties);
-    }
-
-    private static PackagePart? GetRelatedPart(PackagePart source, string relationshipId, string relationshipType)
-    {
-        if (!source.RelationshipExists(relationshipId))
-        {
-            throw new InvalidDataException($"Worksheet relationship '{relationshipId}' does not exist.");
-        }
-
-        PackageRelationship relationship = source.GetRelationship(relationshipId);
-        if (relationship.RelationshipType != relationshipType ||
-            relationship.TargetMode != TargetMode.Internal)
-        {
-            return null;
-        }
-
-        Uri partUri = PackUriHelper.ResolvePartUri(source.Uri, relationship.TargetUri);
-        return source.Package.PartExists(partUri)
-            ? source.Package.GetPart(partUri)
-            : throw new InvalidDataException($"Worksheet relationship '{relationshipId}' has no target part.");
-    }
-
-    private static List<PackagePart> GetRelatedParts(PackagePart source, string relationshipType)
-    {
-        List<PackagePart> parts = [];
-        foreach (PackageRelationship relationship in source.GetRelationshipsByType(relationshipType))
-        {
-            if (relationship.TargetMode != TargetMode.Internal)
-            {
-                continue;
-            }
-
-            Uri partUri = PackUriHelper.ResolvePartUri(source.Uri, relationship.TargetUri);
-            if (!source.Package.PartExists(partUri))
-            {
-                throw new InvalidDataException($"Relationship '{relationship.Id}' has no target part.");
-            }
-
-            parts.Add(source.Package.GetPart(partUri));
-        }
-
-        return parts;
-    }
-
-    private static void DeleteRelatedParts(Package package, PackagePart source, string relationshipType)
-    {
-        foreach (PackageRelationship relationship in source.GetRelationshipsByType(relationshipType).ToArray())
-        {
-            if (relationship.TargetMode == TargetMode.Internal)
-            {
-                Uri partUri = PackUriHelper.ResolvePartUri(source.Uri, relationship.TargetUri);
-                if (package.PartExists(partUri))
-                {
-                    package.DeletePart(partUri);
-                }
-            }
-
-            source.DeleteRelationship(relationship.Id);
-        }
-    }
-
-    private static List<Biff12Record> ReadAllRecords(PackagePart part, CancellationToken cancellationToken)
-    {
-        List<Biff12Record> records = [];
-        using Stream stream = part.GetStream(FileMode.Open, FileAccess.Read);
-        Biff12Reader reader = new(new BufferedStream(stream, CopyBufferSize));
-        while (reader.TryRead(out Biff12Record record))
-        {
-            if (records.Count % CancellationCheckInterval == 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-            }
-
-            records.Add(record);
-        }
-
-        return records;
+        return new WorkbookInfo(XlsbPackage.ReadSheets(records), calculationProperties);
     }
 
     private static int GetOneBasedRow(long zeroBasedRow)
@@ -675,22 +484,6 @@ internal static class XlsbFormulaRemover
         {
             Biff12Writer.Write(destination, record);
             pending = null;
-        }
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // The uniquely named staging file is never a user file.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // See the IOException rationale above.
         }
     }
 
@@ -757,7 +550,6 @@ internal static class XlsbFormulaRemover
         public const int FormulaBoolean = 10;
         public const int FormulaError = 11;
         public const int CellMetadata = 49;
-        public const int BundleSheet = 156;
         public const int CalculationProperties = 157;
         public const int BeginList = 343;
         public const int BeginListColumn = 347;
