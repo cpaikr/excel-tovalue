@@ -53,7 +53,11 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] `xlclean styles` for `.xlsb`: BIFF12 reader, rewriter, and independent
   verifier, with record layouts confirmed against Excel-saved files and
   Excel-saved test fixtures (`tests/XlClean.Core.Tests/Fixtures/`).
-- [ ] Release 4.0.0 and rename the repository to `cpaikr/xlclean`.
+- [x] 4.0.0 documentation: README install, usage, and output for `xlclean`,
+  the skill moved to `skills/xlclean` and extended to `styles`, and its
+  eval cases. The skill has not been re-evaluated in fresh contexts since.
+- [ ] Release 4.0.0: rename the repository to `cpaikr/xlclean`, merge the
+  documentation, tag, and verify the documented install.
 - [ ] Style cleanup in the GUI (4.1.0).
 
 ## Product constraints
@@ -83,8 +87,9 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - CLI executables are self-contained and untrimmed because the OpenXML SDK
   depends on reflection. They run in invariant-globalization mode, so Linux
   hosts need no ICU; the engine uses only ordinal and invariant operations.
-- The repository is public at `cpaikr/excel-tovalue` (moved from a private
-  `sjunepark` repository on 2026-11-18), and releases download without a
+- The repository is public at `cpaikr/xlclean` (moved from a private
+  `sjunepark` repository on 2026-11-18 as `cpaikr/excel-tovalue`, renamed for
+  4.0.0; GitHub redirects the old name), and releases download without a
   login. The CLI has no update check or self-upgrade; reinstalling from a
   newer release is the upgrade path.
 - The source is licensed under the Elastic License 2.0
