@@ -14,6 +14,7 @@ internal static class CommandLineParser
         command switch
         {
             CliCommand.Values => "values",
+            CliCommand.Styles => "styles",
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
         };
 
@@ -34,11 +35,7 @@ internal static class CommandLineParser
 
         IReadOnlyList<string> commandArguments = [.. arguments.Skip(1)];
         CommandLineParseResult? discovery = ParseDiscovery(commandArguments, command);
-        return discovery ?? command switch
-        {
-            CliCommand.Values => ParseValues(commandArguments),
-            _ => throw new UnreachableException(),
-        };
+        return discovery ?? ParseCommand(command, commandArguments);
     }
 
     // Without a command only discovery works. An option first is the 3.x
@@ -91,8 +88,10 @@ internal static class CommandLineParser
         return versionRequested ? CommandLineParseResult.Version() : null;
     }
 
-    private static CommandLineParseResult ParseValues(IReadOnlyList<string> arguments)
+    // Every command takes --output and workbooks; only values takes a scope.
+    private static CommandLineParseResult ParseCommand(CliCommand command, IReadOnlyList<string> arguments)
     {
+        bool allowsScope = command == CliCommand.Values;
         string? outputDirectory = null;
         int startRow = 1;
         bool startRowWasSet = false;
@@ -112,6 +111,8 @@ internal static class CommandLineParser
             if (!optionsEnded && TrySplitLongOption(argument, out string option, out string? inlineValue))
             {
                 CommandLineParseResult? failure = ParseLongOption(
+                    command,
+                    allowsScope,
                     option,
                     inlineValue,
                     arguments,
@@ -128,32 +129,37 @@ internal static class CommandLineParser
                 continue;
             }
 
-            if (!optionsEnded && argument is "-o" or "-r" or "-x")
+            if (!optionsEnded && (argument == "-o" || (allowsScope && argument is "-r" or "-x")))
             {
                 string? value = ReadFollowingValue(arguments, ref index);
                 if (value is null)
                 {
-                    return CommandLineParseResult.ValuesFailure($"Option '{argument}' requires a value.");
+                    return CommandLineParseResult.Failure(command, $"Option '{argument}' requires a value.");
                 }
 
-                CommandLineParseResult? failure = argument switch
+                string? error = argument switch
                 {
                     "-o" => SetOutputDirectory(value, ref outputDirectory),
                     "-r" => SetStartRow(value, ref startRow, ref startRowWasSet),
                     "-x" => AddExcludedPattern(value, excludedPatterns),
                     _ => throw new UnreachableException(),
                 };
-                if (failure is not null)
+                if (error is not null)
                 {
-                    return failure;
+                    return CommandLineParseResult.Failure(command, error);
                 }
 
                 continue;
             }
 
+            if (!optionsEnded && !allowsScope && argument is "-r" or "-x")
+            {
+                return CommandLineParseResult.Failure(command, $"Option '{argument}' applies only to 'xlclean values'.");
+            }
+
             if (!optionsEnded && argument.StartsWith('-'))
             {
-                return CommandLineParseResult.ValuesFailure($"Unknown option '{argument}'.");
+                return CommandLineParseResult.Failure(command, $"Unknown option '{argument}'.");
             }
 
             inputPaths.Add(argument);
@@ -161,15 +167,15 @@ internal static class CommandLineParser
 
         if (outputDirectory is null)
         {
-            return CommandLineParseResult.ValuesFailure("Required option '--output' was not provided.");
+            return CommandLineParseResult.Failure(command, "Required option '--output' was not provided.");
         }
 
         if (inputPaths.Count == 0)
         {
-            return CommandLineParseResult.ValuesFailure("At least one input workbook is required.");
+            return CommandLineParseResult.Failure(command, "At least one input workbook is required.");
         }
 
-        return CommandLineParseResult.Success(CliCommand.Values, new CommandLineOptions(
+        return CommandLineParseResult.Success(command, new CommandLineOptions(
             inputPaths.AsReadOnly(),
             outputDirectory,
             startRow,
@@ -177,6 +183,8 @@ internal static class CommandLineParser
     }
 
     private static CommandLineParseResult? ParseLongOption(
+        CliCommand command,
+        bool allowsScope,
         string option,
         string? inlineValue,
         IReadOnlyList<string> arguments,
@@ -186,54 +194,59 @@ internal static class CommandLineParser
         ref bool startRowWasSet,
         List<string> excludedPatterns)
     {
-        if (option is not ("--output" or "--start-row" or "--exclude"))
+        if (!allowsScope && option is "--start-row" or "--exclude")
         {
-            return CommandLineParseResult.ValuesFailure($"Unknown option '{option}'.");
+            return CommandLineParseResult.Failure(command, $"Option '{option}' applies only to 'xlclean values'.");
+        }
+
+        if (option != "--output" && !(allowsScope && option is "--start-row" or "--exclude"))
+        {
+            return CommandLineParseResult.Failure(command, $"Unknown option '{option}'.");
         }
 
         string? value = inlineValue ?? ReadFollowingValue(arguments, ref index);
         if (string.IsNullOrWhiteSpace(value))
         {
-            return CommandLineParseResult.ValuesFailure($"Option '{option}' requires a value.");
+            return CommandLineParseResult.Failure(command, $"Option '{option}' requires a value.");
         }
 
-        return option switch
+        string? error = option switch
         {
             "--output" => SetOutputDirectory(value, ref outputDirectory),
             "--start-row" => SetStartRow(value, ref startRow, ref startRowWasSet),
             "--exclude" => AddExcludedPattern(value, excludedPatterns),
             _ => throw new UnreachableException(),
         };
+        return error is null ? null : CommandLineParseResult.Failure(command, error);
     }
 
-    private static CommandLineParseResult? SetOutputDirectory(
+    private static string? SetOutputDirectory(
         string value,
         ref string? outputDirectory)
     {
         if (outputDirectory is not null)
         {
-            return CommandLineParseResult.ValuesFailure("Option '--output' was provided more than once.");
+            return "Option '--output' was provided more than once.";
         }
 
         outputDirectory = value;
         return null;
     }
 
-    private static CommandLineParseResult? SetStartRow(
+    private static string? SetStartRow(
         string value,
         ref int startRow,
         ref bool startRowWasSet)
     {
         if (startRowWasSet)
         {
-            return CommandLineParseResult.ValuesFailure("Option '--start-row' was provided more than once.");
+            return "Option '--start-row' was provided more than once.";
         }
 
         if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int parsed) ||
             parsed is < 1 or > FormulaRemovalRequest.MaximumRowNumber)
         {
-            return CommandLineParseResult.ValuesFailure(
-                $"Start row must be an integer from 1 to {FormulaRemovalRequest.MaximumRowNumber}.");
+            return $"Start row must be an integer from 1 to {FormulaRemovalRequest.MaximumRowNumber}.";
         }
 
         startRow = parsed;
@@ -241,13 +254,13 @@ internal static class CommandLineParser
         return null;
     }
 
-    private static CommandLineParseResult? AddExcludedPattern(
+    private static string? AddExcludedPattern(
         string value,
         List<string> excludedPatterns)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return CommandLineParseResult.ValuesFailure("Excluded sheet patterns cannot be blank.");
+            return "Excluded sheet patterns cannot be blank.";
         }
 
         excludedPatterns.Add(value);
@@ -304,6 +317,7 @@ internal sealed record CommandLineOptions(
 internal enum CliCommand
 {
     Values,
+    Styles,
 }
 
 internal enum CommandLineParseKind
@@ -336,6 +350,6 @@ internal sealed record CommandLineParseResult(
     public static CommandLineParseResult Failure(string message, CliCommand? command) =>
         new(CommandLineParseKind.Failure, command, null, message);
 
-    public static CommandLineParseResult ValuesFailure(string message) =>
-        Failure(message, CliCommand.Values);
+    public static CommandLineParseResult Failure(CliCommand command, string message) =>
+        Failure(message, command);
 }

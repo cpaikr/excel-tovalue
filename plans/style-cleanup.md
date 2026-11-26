@@ -96,8 +96,11 @@ reachable from cells and rewrites indices to a compact numbering.
    index in every worksheet to the compacted `cellXfs`. Update the `count`
    attributes. Nothing else in `styles.xml` changes.
 
-When no cell format is removed or merged, only the styles part is rewritten
-and worksheets are copied unchanged.
+When no referenced cell format moves, only the styles part is rewritten and
+worksheets are copied unchanged. Worksheets are rewritten node by node with
+only the three style attributes changed, and tab, line feed, and carriage
+return characters that a reader would normalize are written as character
+references.
 
 ### Fail closed
 

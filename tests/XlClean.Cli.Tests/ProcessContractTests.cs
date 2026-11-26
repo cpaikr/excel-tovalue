@@ -139,6 +139,35 @@ public sealed class ProcessContractTests
     }
 
     [TestMethod]
+    public async Task StylesRemovesUnusedStylesWithoutTouchingTheSource()
+    {
+        string input = Path.Combine(workingDirectory, "Styled.xlsx");
+        string outputDirectory = Path.Combine(workingDirectory, "out");
+        CreateStyledWorkbook(input);
+        byte[] sourceHash = SHA256.HashData(await File.ReadAllBytesAsync(input));
+
+        ProcessResult result = await Run("styles", "--output", outputDirectory, input);
+
+        Assert.AreEqual(0, result.ExitCode, result.StandardOutputText);
+        Assert.IsEmpty(result.StandardError);
+        using JsonDocument document = ParseSingleDocument(result);
+        JsonElement root = document.RootElement;
+        Assert.AreEqual("styles", root.GetProperty("command").GetString());
+        JsonElement file = root.GetProperty("files")[0];
+        JsonElement changes = file.GetProperty("changes");
+        Assert.AreEqual(12, changes.GetProperty("cellStyles").GetProperty("before").GetInt32());
+        Assert.AreEqual(1, changes.GetProperty("cellStyles").GetProperty("after").GetInt32());
+        Assert.AreEqual(1, changes.GetProperty("mergedCellFormats").GetInt32());
+        string output = file.GetProperty("output").GetString()!;
+        Assert.AreEqual("Styled_스타일정리.xlsx", Path.GetFileName(output));
+        CollectionAssert.AreEqual(sourceHash, SHA256.HashData(await File.ReadAllBytesAsync(input)));
+        using SpreadsheetDocument cleaned = SpreadsheetDocument.Open(output, isEditable: false);
+        Assert.AreEqual(
+            1,
+            cleaned.WorkbookPart!.WorkbookStylesPart!.Stylesheet!.CellStyles!.Elements<CellStyle>().Count());
+    }
+
+    [TestMethod]
     public async Task UsageErrorsExitTwoWithAStructuredError()
     {
         ProcessResult result = await Run("--no-such-option");
@@ -255,6 +284,44 @@ public sealed class ProcessContractTests
         {
             Id = workbookPart.GetIdOfPart(worksheetPart),
             SheetId = 1,
+            Name = "Data",
+        }));
+    }
+
+    // Normal plus 11 unused custom styles; two used cell formats that look the same.
+    private static void CreateStyledWorkbook(string path)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Create(path, SpreadsheetDocumentType.Workbook);
+        WorkbookPart workbookPart = document.AddWorkbookPart();
+        WorkbookStylesPart stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
+        CellStyleFormats styleFormats = new(new CellFormat { NumberFormatId = 0U, FontId = 0U, FillId = 0U, BorderId = 0U });
+        CellStyles cellStyles = new(new CellStyle { Name = "Normal", FormatId = 0U, BuiltinId = 0U });
+        for (uint index = 1; index <= 11; index++)
+        {
+            styleFormats.Append(new CellFormat { NumberFormatId = 0U, FontId = 1U, FillId = 0U, BorderId = 0U });
+            cellStyles.Append(new CellStyle { Name = $"Copied {index}", FormatId = index });
+        }
+
+        stylesPart.Stylesheet = new Stylesheet(
+            new Fonts(new Font(new FontSize { Val = 11D }), new Font(new Bold(), new FontSize { Val = 11D })),
+            new Fills(new Fill(new PatternFill { PatternType = PatternValues.None }), new Fill(new PatternFill { PatternType = PatternValues.Gray125 })),
+            new Borders(new Border(new LeftBorder(), new RightBorder(), new TopBorder(), new BottomBorder(), new DiagonalBorder())),
+            styleFormats,
+            new CellFormats(
+                new CellFormat { NumberFormatId = 0U, FontId = 0U, FillId = 0U, BorderId = 0U, FormatId = 0U },
+                new CellFormat { NumberFormatId = 0U, FontId = 1U, FillId = 0U, BorderId = 0U, FormatId = 0U, ApplyFont = true },
+                new CellFormat { NumberFormatId = 0U, FontId = 1U, FillId = 0U, BorderId = 0U, FormatId = 0U, ApplyFont = true }),
+            cellStyles);
+
+        WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+        worksheetPart.Worksheet = new Worksheet(new SheetData(new Row(
+            new Cell { CellReference = "A1", StyleIndex = 1U, CellValue = new CellValue(1) },
+            new Cell { CellReference = "B1", StyleIndex = 2U, CellValue = new CellValue(2) })
+        { RowIndex = 1U }));
+        workbookPart.Workbook = new Workbook(new Sheets(new Sheet
+        {
+            Id = workbookPart.GetIdOfPart(worksheetPart),
+            SheetId = 1U,
             Name = "Data",
         }));
     }

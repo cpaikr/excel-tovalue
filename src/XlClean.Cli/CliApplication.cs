@@ -14,6 +14,11 @@ internal delegate Task<FormulaRemovalBatchResult> FormulaRemovalConverter(
     IProgress<WorkbookProgress>? progress,
     CancellationToken cancellationToken);
 
+internal delegate Task<StyleCleanupBatchResult> StyleCleanupConverter(
+    StyleCleanupRequest request,
+    IProgress<WorkbookProgress>? progress,
+    CancellationToken cancellationToken);
+
 internal static class CliApplication
 {
     public const int SuccessExitCode = 0;
@@ -33,6 +38,7 @@ internal static class CliApplication
 
         Commands:
           values  Replace formulas with their last saved cached values.
+          styles  Remove unused cell styles and formats, and merge identical formats.
 
         Options:
           -h, --help     Show this help, or a command's help after its name.
@@ -59,6 +65,42 @@ internal static class CliApplication
 
         Sources and existing outputs are never overwritten, so read each output
         path from the result instead of predicting its name.
+
+        """;
+
+    private const string StylesHelpText =
+        """
+        Remove unused custom cell styles and unused cell formats, and merge cell formats
+        that look identical, without changing how any cell looks. Use it when Excel
+        reports too many different cell formats or a workbook carries thousands of
+        copied styles.
+
+        Usage:
+          xlclean styles --output <directory> <workbook>...
+
+        Options:
+          -o, --output <directory>  Required destination directory.
+          -h, --help                Show this help.
+              --version             Show the version.
+          --                        Treat every later argument as a workbook path.
+
+        Input: .xlsx and .xlsm workbooks. Each output keeps its input format.
+
+        Kept: built-in styles, styles a table names, styles cells use, and every
+        number format, font, fill, border, and conditional format. Before an output
+        is published, every cell is checked to look exactly as in the source.
+
+        changes: cellStyles and cellFormats ({ "before": n, "after": n }),
+          mergedCellFormats.
+
+        Failure kinds: invalid-input, invalid-workbook, file-access, unexpected,
+          unsupported-workbook-content (macro sheets, shared-workbook history, Strict
+          Open XML, .xlsb).
+
+        Warnings: a workbook with macros lost custom styles a macro might apply by
+        name; the cleaned workbook still exceeds Excel's format limit.
+
+        Run 'xlclean --help' for the output document and exit codes.
 
         """;
 
@@ -113,6 +155,21 @@ internal static class CliApplication
             standardOutput,
             standardError,
             FormulaRemovalEngine.ConvertAsync,
+            StyleCleanupEngine.CleanAsync,
+            cancellationToken);
+
+    internal static Task<int> RunAsync(
+        IReadOnlyList<string> arguments,
+        TextWriter standardOutput,
+        TextWriter standardError,
+        FormulaRemovalConverter converter,
+        CancellationToken cancellationToken) =>
+        RunAsync(
+            arguments,
+            standardOutput,
+            standardError,
+            converter,
+            StyleCleanupEngine.CleanAsync,
             cancellationToken);
 
     [SuppressMessage(
@@ -124,12 +181,14 @@ internal static class CliApplication
         TextWriter standardOutput,
         TextWriter standardError,
         FormulaRemovalConverter converter,
+        StyleCleanupConverter styleCleaner,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(standardOutput);
         ArgumentNullException.ThrowIfNull(standardError);
         ArgumentNullException.ThrowIfNull(converter);
+        ArgumentNullException.ThrowIfNull(styleCleaner);
 
         CommandLineParseResult parseResult = CommandLineParser.Parse(arguments);
         if (parseResult.Kind == CommandLineParseKind.Help)
@@ -138,6 +197,7 @@ internal static class CliApplication
             {
                 null => RootHelpText,
                 CliCommand.Values => ValuesHelpText,
+                CliCommand.Styles => StylesHelpText,
                 _ => throw new UnreachableException(),
             };
             await standardOutput.WriteAsync(help.ReplaceLineEndings("\n")).ConfigureAwait(false);
@@ -163,14 +223,25 @@ internal static class CliApplication
 
         CliCommand command = parseResult.Command!.Value;
         CommandLineOptions options = parseResult.Options!;
-        FormulaRemovalRequest request;
+        Func<Task<IReadOnlyList<FileReport>>> run;
         try
         {
-            request = new FormulaRemovalRequest(
-                options.InputPaths,
-                options.OutputDirectory,
-                options.StartRow,
-                options.ExcludedSheetNamePatterns);
+            run = command switch
+            {
+                CliCommand.Values => RunValues(
+                    new FormulaRemovalRequest(
+                        options.InputPaths,
+                        options.OutputDirectory,
+                        options.StartRow,
+                        options.ExcludedSheetNamePatterns),
+                    converter,
+                    cancellationToken),
+                CliCommand.Styles => RunStyles(
+                    new StyleCleanupRequest(options.InputPaths, options.OutputDirectory),
+                    styleCleaner,
+                    cancellationToken),
+                _ => throw new UnreachableException(),
+            };
         }
         catch (Exception exception) when (
             exception is ArgumentException or NotSupportedException or PathTooLongException or SecurityException)
@@ -186,26 +257,18 @@ internal static class CliApplication
 
         try
         {
-            FormulaRemovalBatchResult result = await converter(
-                request,
-                null,
-                cancellationToken).ConfigureAwait(false);
-
-            await WriteBatchResult(standardOutput, command, result, canceled: false).ConfigureAwait(false);
-            return result.FailedCount == 0 ? SuccessExitCode : ConversionFailureExitCode;
+            IReadOnlyList<FileReport> files = await run().ConfigureAwait(false);
+            await WriteBatchResult(standardOutput, command, files, canceled: false).ConfigureAwait(false);
+            return files.All(file => file.Succeeded) ? SuccessExitCode : ConversionFailureExitCode;
         }
-        catch (FormulaRemovalCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        catch (CommandCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
-            await WriteBatchResult(
-                standardOutput,
-                command,
-                exception.CompletedResult,
-                canceled: true).ConfigureAwait(false);
+            await WriteBatchResult(standardOutput, command, exception.Completed, canceled: true).ConfigureAwait(false);
             return CanceledExitCode;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await WriteBatchResult(standardOutput, command, new([]), canceled: true).ConfigureAwait(false);
+            await WriteBatchResult(standardOutput, command, [], canceled: true).ConfigureAwait(false);
             return CanceledExitCode;
         }
         catch (Exception exception)
@@ -220,18 +283,92 @@ internal static class CliApplication
         }
     }
 
+    private static Func<Task<IReadOnlyList<FileReport>>> RunValues(
+        FormulaRemovalRequest request,
+        FormulaRemovalConverter converter,
+        CancellationToken cancellationToken) =>
+        async () =>
+        {
+            try
+            {
+                return ToReports(await converter(request, null, cancellationToken).ConfigureAwait(false));
+            }
+            catch (FormulaRemovalCanceledException exception) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new CommandCanceledException(ToReports(exception.CompletedResult), exception);
+            }
+        };
+
+    private static Func<Task<IReadOnlyList<FileReport>>> RunStyles(
+        StyleCleanupRequest request,
+        StyleCleanupConverter cleaner,
+        CancellationToken cancellationToken) =>
+        async () =>
+        {
+            try
+            {
+                return ToReports(await cleaner(request, null, cancellationToken).ConfigureAwait(false));
+            }
+            catch (StyleCleanupCanceledException exception) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new CommandCanceledException(ToReports(exception.CompletedResult), exception);
+            }
+        };
+
+    private static FileReport[] ToReports(FormulaRemovalBatchResult result) =>
+        [.. result.Files.Select(file => new FileReport(
+            file.InputPath,
+            file.OutputPath,
+            file.FailureKind,
+            file.ErrorMessage,
+            file.Succeeded
+                ? writer =>
+                {
+                    writer.WriteNumber("removedFormulas", file.RemovedFormulaCount);
+                    writer.WriteNumber("removedTableFormulaDefinitions", file.RemovedTableFormulaDefinitionCount);
+                    writer.WriteNumber("processedSheets", file.ProcessedSheetCount);
+                    writer.WriteNumber("excludedSheets", file.ExcludedSheetCount);
+                }
+                : null,
+            file.Warnings))];
+
+    private static FileReport[] ToReports(StyleCleanupBatchResult result) =>
+        [.. result.Files.Select(file => new FileReport(
+            file.InputPath,
+            file.OutputPath,
+            file.FailureKind,
+            file.ErrorMessage,
+            file.Changes is { } changes
+                ? writer =>
+                {
+                    WriteBeforeAfter(writer, "cellStyles", changes.CellStylesBefore, changes.CellStylesAfter);
+                    WriteBeforeAfter(writer, "cellFormats", changes.CellFormatsBefore, changes.CellFormatsAfter);
+                    writer.WriteNumber("mergedCellFormats", changes.MergedCellFormats);
+                }
+                : null,
+            file.Warnings))];
+
+    private static void WriteBeforeAfter(Utf8JsonWriter writer, string name, int before, int after)
+    {
+        writer.WriteStartObject(name);
+        writer.WriteNumber("before", before);
+        writer.WriteNumber("after", after);
+        writer.WriteEndObject();
+    }
+
     private static Task WriteBatchResult(
         TextWriter output,
         CliCommand command,
-        FormulaRemovalBatchResult result,
+        IReadOnlyList<FileReport> files,
         bool canceled) =>
         WriteDocument(output, writer =>
         {
-            writer.WriteBoolean("ok", !canceled && result.FailedCount == 0);
+            int succeeded = files.Count(file => file.Succeeded);
+            writer.WriteBoolean("ok", !canceled && succeeded == files.Count);
             writer.WriteString("version", Version);
             writer.WriteString("command", FormatCommand(command));
             writer.WriteStartArray("files");
-            foreach (FormulaRemovalFileResult file in result.Files)
+            foreach (FileReport file in files)
             {
                 writer.WriteStartObject();
                 writer.WriteString("input", file.InputPath);
@@ -250,21 +387,17 @@ internal static class CliApplication
                 }
 
                 // A failed file published nothing, so it has no changes to report.
-                if (file.Succeeded)
+                if (file.WriteChanges is { } writeChanges)
                 {
                     writer.WriteStartObject("changes");
-                    writer.WriteNumber("removedFormulas", file.RemovedFormulaCount);
-                    writer.WriteNumber(
-                        "removedTableFormulaDefinitions",
-                        file.RemovedTableFormulaDefinitionCount);
-                    writer.WriteNumber("processedSheets", file.ProcessedSheetCount);
-                    writer.WriteNumber("excludedSheets", file.ExcludedSheetCount);
+                    writeChanges(writer);
                     writer.WriteEndObject();
                 }
                 else
                 {
                     writer.WriteNull("changes");
                 }
+
                 writer.WriteStartArray("warnings");
                 foreach (string warning in file.Warnings)
                 {
@@ -276,7 +409,7 @@ internal static class CliApplication
             }
 
             writer.WriteEndArray();
-            WriteSummary(writer, result.Files.Count, result.SucceededCount, result.FailedCount, canceled);
+            WriteSummary(writer, files.Count, succeeded, files.Count - succeeded, canceled);
             writer.WriteNull("error");
         });
 
@@ -376,4 +509,28 @@ internal static class CliApplication
         int metadataIndex = informationalVersion.IndexOf('+', StringComparison.Ordinal);
         return metadataIndex < 0 ? informationalVersion : informationalVersion[..metadataIndex];
     }
+}
+
+/// <summary>One file's outcome as the JSON result reports it, whatever the command.</summary>
+/// <param name="WriteChanges">Writes the command's change counts; null for a failed file.</param>
+internal sealed record FileReport(
+    string InputPath,
+    string? OutputPath,
+    WorkbookFailureKind FailureKind,
+    string? ErrorMessage,
+    Action<Utf8JsonWriter>? WriteChanges,
+    IReadOnlyList<string> Warnings)
+{
+    public bool Succeeded => FailureKind == WorkbookFailureKind.None;
+}
+
+/// <summary>Cancellation that keeps the reports of files completed before it.</summary>
+[SuppressMessage(
+    "Design",
+    "CA1032:Implement standard exception constructors",
+    Justification = "Only the command runners create this result-carrying exception.")]
+internal sealed class CommandCanceledException(IReadOnlyList<FileReport> completed, Exception innerException)
+    : OperationCanceledException("The command was canceled.", innerException)
+{
+    public IReadOnlyList<FileReport> Completed { get; } = completed;
 }

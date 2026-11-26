@@ -47,9 +47,11 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Extract the shared per-file safety pipeline (`WorkbookBatchPipeline`) from
   the formula engine; failure kinds and progress are now `Workbook*` types.
 - [x] Style reader, planner, and independent verifier for `.xlsx`/`.xlsm`
-  (`src/XlClean.Core/Styles/`), not yet reachable from a command.
-- [ ] Style cleanup for `.xlsx`/`.xlsm` (rewriter and `xlclean styles`), then
-  `.xlsb`.
+  (`src/XlClean.Core/Styles/`).
+- [x] `xlclean styles` for `.xlsx`/`.xlsm`: rewriter, `StyleCleanupEngine`,
+  and the CLI command. `.xlsb` fails as `unsupported-workbook-content` until
+  the next milestone.
+- [ ] Style cleanup for `.xlsb`.
 - [ ] Release 4.0.0 and rename the repository to `cpaikr/xlclean`.
 - [ ] Style cleanup in the GUI (4.1.0).
 
@@ -102,8 +104,15 @@ files, without modifying source workbooks or overwriting earlier outputs.
 
 - Pinned .NET SDK `10.0.110` locked restore and Release build: clean, zero
   warnings.
-- Automated tests (2026-11-26, `main` toward 4.0.0): 180 passed across Core,
+- Automated tests (2026-11-26, `main` toward 4.0.0): 204 passed across Core,
   CLI, and App projects, including pipeline tests with a non-formula operation.
+- Excel desktop round trip of `xlclean styles` (2026-11-26, Excel 16, its own
+  hidden instance): Excel built `.xlsx` and `.xlsm` workbooks with 300 junk
+  custom styles, a used custom style, a built-in style, direct formatting, a
+  date format, and a table. The CLI cleaned each from 303 to 3 stored styles.
+  Excel reopened and resaved both outputs, wrote no repair log, and reported
+  identical formatting on every checked cell. Not yet covered: workbooks with
+  duplicate cell formats as other tools write them, and real-world samples.
 - Excel desktop round trip (2026-11-05): `.xlsb` and `.xlsx` outputs of
   Excel-saved workbooks with every formula result type, array, dynamic-array,
   data-table, and table calculated/totals formulas reopened in Excel with
