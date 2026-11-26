@@ -59,15 +59,7 @@ internal static class OpenXmlStyleReader
     {
         using Package package = Package.Open(workbookPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         PackagePart workbookPart = GetWorkbookPart(package);
-
-        foreach (PackageRelationship relationship in workbookPart.GetRelationships())
-        {
-            if (UnsupportedWorkbookRelationships.TryGetValue(relationship.RelationshipType, out string? description))
-            {
-                throw new UnsupportedStyleContentException(
-                    $"The workbook contains {description}, whose cells reference styles in a form this tool does not rewrite.");
-            }
-        }
+        RejectUnsupportedParts(workbookPart);
 
         PackagePart? stylesPart = GetRelatedParts(workbookPart, StylesRelationship).SingleOrDefault();
         StyleSheetModel model = stylesPart is null ? StyleSheetModel.Empty : ReadStyleSheet(stylesPart);
@@ -93,6 +85,19 @@ internal static class OpenXmlStyleReader
         }
 
         return (model, new StyleUsage(cellFormats, tableStyleNames));
+    }
+
+    /// <summary>Fails closed on workbook parts that carry cell style indices the cleanup does not rewrite.</summary>
+    public static void RejectUnsupportedParts(PackagePart workbookPart)
+    {
+        foreach (PackageRelationship relationship in workbookPart.GetRelationships())
+        {
+            if (UnsupportedWorkbookRelationships.TryGetValue(relationship.RelationshipType, out string? description))
+            {
+                throw new UnsupportedStyleContentException(
+                    $"The workbook contains {description}, whose cells reference styles in a form this tool does not rewrite.");
+            }
+        }
     }
 
     public static PackagePart GetWorkbookPart(Package package)

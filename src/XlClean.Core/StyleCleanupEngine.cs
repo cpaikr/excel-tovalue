@@ -221,16 +221,20 @@ public static class StyleCleanupEngine
 
         public StyleCleanupReport Transform(WorkbookFile file, CancellationToken cancellationToken)
         {
-            if (file.Format == WorkbookFormat.Binary)
-            {
-                throw new UnsupportedStyleContentException(
-                    "Style cleanup does not support .xlsb workbooks yet; save the workbook as .xlsx or .xlsm.");
-            }
-
-            (StyleSheetModel model, StyleUsage usage) = OpenXmlStyleReader.Read(file.Path, cancellationToken);
+            bool binary = file.Format == WorkbookFormat.Binary;
+            (StyleSheetModel model, StyleUsage usage) = binary
+                ? XlsbStyleCleanup.Read(file.Path, cancellationToken)
+                : OpenXmlStyleReader.Read(file.Path, cancellationToken);
             StylePlan plan = StylePlanner.Plan(model, usage);
             IReadOnlyList<string> warnings = Warnings(file.Path, model, plan);
-            OpenXmlStyleRewriter.Apply(file.Path, plan, cancellationToken);
+            if (binary)
+            {
+                XlsbStyleCleanup.Apply(file.Path, plan, cancellationToken);
+            }
+            else
+            {
+                OpenXmlStyleRewriter.Apply(file.Path, plan, cancellationToken);
+            }
 
             return new StyleCleanupReport(
                 new StyleCleanupChanges(
@@ -242,7 +246,16 @@ public static class StyleCleanupEngine
                 warnings);
         }
 
-        public void Verify(WorkbookFile file, StyleCleanupReport changes, CancellationToken cancellationToken) =>
-            OpenXmlStyleVerifier.Verify(file.InputPath, file.Path, cancellationToken);
+        public void Verify(WorkbookFile file, StyleCleanupReport changes, CancellationToken cancellationToken)
+        {
+            if (file.Format == WorkbookFormat.Binary)
+            {
+                XlsbStyleVerifier.Verify(file.InputPath, file.Path, cancellationToken);
+            }
+            else
+            {
+                OpenXmlStyleVerifier.Verify(file.InputPath, file.Path, cancellationToken);
+            }
+        }
     }
 }

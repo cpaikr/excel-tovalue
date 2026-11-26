@@ -84,7 +84,7 @@ internal static class CliApplication
               --version             Show the version.
           --                        Treat every later argument as a workbook path.
 
-        Input: .xlsx and .xlsm workbooks. Each output keeps its input format.
+        Input: .xlsx, .xlsm, and .xlsb workbooks. Each output keeps its input format.
 
         Kept: built-in styles, styles a table names, styles cells use, and every
         number format, font, fill, border, and conditional format. Before an output
@@ -95,7 +95,7 @@ internal static class CliApplication
 
         Failure kinds: invalid-input, invalid-workbook, file-access, unexpected,
           unsupported-workbook-content (macro sheets, shared-workbook history, Strict
-          Open XML, .xlsb).
+          Open XML, .xlsb cell records this tool does not know).
 
         Warnings: a workbook with macros lost custom styles a macro might apply by
         name; the cleaned workbook still exceeds Excel's format limit.

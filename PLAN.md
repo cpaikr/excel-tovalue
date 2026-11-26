@@ -49,9 +49,10 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Style reader, planner, and independent verifier for `.xlsx`/`.xlsm`
   (`src/XlClean.Core/Styles/`).
 - [x] `xlclean styles` for `.xlsx`/`.xlsm`: rewriter, `StyleCleanupEngine`,
-  and the CLI command. `.xlsb` fails as `unsupported-workbook-content` until
-  the next milestone.
-- [ ] Style cleanup for `.xlsb`.
+  and the CLI command.
+- [x] `xlclean styles` for `.xlsb`: BIFF12 reader, rewriter, and independent
+  verifier, with record layouts confirmed against Excel-saved files and
+  Excel-saved test fixtures (`tests/XlClean.Core.Tests/Fixtures/`).
 - [ ] Release 4.0.0 and rename the repository to `cpaikr/xlclean`.
 - [ ] Style cleanup in the GUI (4.1.0).
 
@@ -104,15 +105,17 @@ files, without modifying source workbooks or overwriting earlier outputs.
 
 - Pinned .NET SDK `10.0.110` locked restore and Release build: clean, zero
   warnings.
-- Automated tests (2026-11-26, `main` toward 4.0.0): 204 passed across Core,
+- Automated tests (2026-11-26, `main` toward 4.0.0): 216 passed across Core,
   CLI, and App projects, including pipeline tests with a non-formula operation.
 - Excel desktop round trip of `xlclean styles` (2026-11-26, Excel 16, its own
   hidden instance): Excel built `.xlsx` and `.xlsm` workbooks with 300 junk
   custom styles, a used custom style, a built-in style, direct formatting, a
   date format, and a table. The CLI cleaned each from 303 to 3 stored styles.
   Excel reopened and resaved both outputs, wrote no repair log, and reported
-  identical formatting on every checked cell. Not yet covered: workbooks with
-  duplicate cell formats as other tools write them, and real-world samples.
+  identical formatting on every checked cell. The same round trip passed for
+  `.xlsb`, and for an `.xlsb` whose cell indices were renumbered after a merge
+  (binary index removed). Not yet covered: workbooks with duplicate cell
+  formats as other tools write them, and real-world samples.
 - Excel desktop round trip (2026-11-05): `.xlsb` and `.xlsx` outputs of
   Excel-saved workbooks with every formula result type, array, dynamic-array,
   data-table, and table calculated/totals formulas reopened in Excel with

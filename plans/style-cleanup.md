@@ -177,9 +177,14 @@ The same algorithm on BIFF12 records, reusing `Biff12Reader` and
   `BrtColInfo` (2.4.336). A row's `ixfe` is remapped only when it applies,
   and a stale value there is not a range error.
 
-Each layout is confirmed against files saved by Excel before the rewriter
-relies on it, as was done for the formula records; the `BrtShort*` forms rely
-on that alone. The `.xlsb` verifier compares records the same way the `.xlsx`
+Confirmed against workbooks saved by Excel 16 (2026-11-26), recorded in
+`XlsbStyleRecords`: section begin records carry a u32 count; each `BrtStyle`
+is preceded by an alternate-content uid group (37, 3072, 38) that moves with
+it; `BrtBeginList` style names follow the name, display name, and comment, and
+`BrtBeginListCol` style names are its fourth to sixth strings. Excel wrote no
+`BrtShort*` records, so they are not in the accepted sheet-data set and fail
+the file. A rewritten worksheet loses its binary index part, which Excel
+rebuilds. The `.xlsb` verifier compares records the same way the `.xlsx`
 verifier compares elements.
 
 ## CLI 4.0.0

@@ -13,4 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\XlClean.Core\XlClean.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Saved by desktop Excel; author and save path removed. See Fixtures/README.md. -->
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
