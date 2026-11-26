@@ -14,17 +14,33 @@ using System.Text;
 /// </param>
 /// <param name="KeptNamedStyles">Source <c>cellStyles</c> indices that stay, in source order.</param>
 /// <param name="MergedCellFormats">Used cell formats folded into an identical earlier one.</param>
+/// <param name="SourceNamedStyleCount">Named styles in the source.</param>
 internal sealed record StylePlan(
     IReadOnlyList<int?> CellFormatMap,
     IReadOnlyList<int?> CellStyleFormatMap,
     IReadOnlyList<int> KeptNamedStyles,
-    int MergedCellFormats)
+    int MergedCellFormats,
+    int SourceNamedStyleCount)
 {
     /// <summary>Gets the number of cell formats the output keeps.</summary>
     public int KeptCellFormatCount => CellFormatMap.Where(index => index is not null).Distinct().Count();
 
-    /// <summary>Gets a value indicating whether any cell, row, or column index changes.</summary>
-    public bool RenumbersCellFormats => CellFormatMap.Where((target, index) => target != index).Any();
+    /// <summary>
+    /// Gets a value indicating whether a referenced cell format moves, so cell, row, and column
+    /// indices must be rewritten. Removed formats are unreferenced and need no rewrite.
+    /// </summary>
+    public bool RenumbersCellFormats => CellFormatMap.Where((target, index) => target is not null && target != index).Any();
+
+    /// <summary>Gets a value indicating whether the cell format table changes at all.</summary>
+    public bool ChangesCellFormats => CellFormatMap.Where((target, index) => target != index).Any();
+
+    /// <summary>Gets a value indicating whether a style format or named style is removed.</summary>
+    public bool RemovesStyles =>
+        KeptNamedStyles.Count != SourceNamedStyleCount ||
+        CellStyleFormatMap.Where((target, index) => target != index).Any();
+
+    /// <summary>Gets a value indicating whether applying the plan changes nothing.</summary>
+    public bool IsIdentity => !ChangesCellFormats && !RemovesStyles;
 }
 
 /// <summary>
@@ -106,7 +122,7 @@ internal static class StylePlanner
             }
         }
 
-        return new StylePlan(cellFormatMap, styleFormatMap, keptNamedStyles, merged);
+        return new StylePlan(cellFormatMap, styleFormatMap, keptNamedStyles, merged, model.NamedStyles.Count);
     }
 
     private static int RequireStyleFormat(StyleSheetModel model, int index, string owner) =>
