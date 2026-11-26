@@ -59,9 +59,13 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Release 4.0.0 (2026-11-26): repository renamed to `cpaikr/xlclean`,
   documentation merged, `v4.0.0` tagged and published, documented install
   verified on Windows and Linux.
-- [ ] Re-evaluate the `xlclean` skill in fresh agent contexts
-  ([evals/skill/cases.json](evals/skill/cases.json)), including the two
-  `styles` cases.
+- [x] Re-evaluate the `xlclean` skill in fresh agent contexts
+  ([2026-11-26](evals/skill/evaluation-2026-11-26.md)): six cases passed,
+  and the live `values` case exposed the empty-cached-value defect below.
+- [x] Fix: an empty cached value (`<v></v>`, as openpyxl writes for formulas
+  it never calculated) is a missing value unless the result is text. Before
+  the fix, released 3.x and 4.0.0 silently blanked such cells.
+- [ ] Release 4.0.1 with that fix.
 - [ ] Style cleanup in the GUI (4.1.0).
 
 ## Product constraints

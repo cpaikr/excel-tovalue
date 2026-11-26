@@ -97,6 +97,57 @@ public sealed class FormulaRemovalEngineTests
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
 
+    // openpyxl and similar writers emit an empty <v></v> for formulas they never calculated.
+    // An empty value is not a cached result for a number, boolean, or error cell.
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("n")]
+    [DataRow("b")]
+    [DataRow("e")]
+    public async Task EmptyCachedValueIsMissingUnlessTheResultIsText(string? type)
+    {
+        string inputPath = Path.Combine(testDirectory, "EmptyCache.xlsx");
+        string outputDirectory = Path.Combine(testDirectory, "output");
+        CreateWorkbook(
+            inputPath,
+            false,
+            new SheetSpec("Data", new CellSpec("B1", "A1*3", string.Empty, type switch
+            {
+                "b" => CellValues.Boolean,
+                "e" => CellValues.Error,
+                _ => CellValues.Number,
+            })));
+        if (type is null)
+        {
+            RemoveCellType(inputPath, "B1");
+        }
+
+        FormulaRemovalBatchResult batch = await FormulaRemovalEngine.ConvertAsync(new([inputPath], outputDirectory));
+
+        FormulaRemovalFileResult result = batch.Files.Single();
+        Assert.AreEqual(WorkbookFailureKind.MissingCachedValue, result.FailureKind);
+        StringAssert.Contains(result.ErrorMessage, "B1");
+        Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
+    }
+
+    [TestMethod]
+    public async Task EmptyTextResultIsAValidCachedValue()
+    {
+        // Excel saves a formula that returns "" as t="str" with an empty value.
+        string inputPath = Path.Combine(testDirectory, "EmptyText.xlsx");
+        string outputDirectory = Path.Combine(testDirectory, "output");
+        CreateWorkbook(
+            inputPath,
+            false,
+            new SheetSpec("Data", new CellSpec("B1", "IF(A1>0,\"x\",\"\")", string.Empty, CellValues.String)));
+
+        FormulaRemovalBatchResult batch = await FormulaRemovalEngine.ConvertAsync(new([inputPath], outputDirectory));
+
+        FormulaRemovalFileResult result = batch.Files.Single();
+        Assert.IsTrue(result.Succeeded, result.ErrorMessage);
+        Assert.AreEqual(1, result.RemovedFormulaCount);
+    }
+
     [TestMethod]
     public async Task OneFailureDoesNotAbortRemainingWorkbooks()
     {
@@ -750,6 +801,14 @@ public sealed class FormulaRemovalEngineTests
         Assert.IsNotNull(published.OutputPath);
         Assert.IsTrue(File.Exists(published.OutputPath));
         Assert.HasCount(1, Directory.EnumerateFiles(outputDirectory).ToArray());
+    }
+
+    private static void RemoveCellType(string path, string reference)
+    {
+        using SpreadsheetDocument document = SpreadsheetDocument.Open(path, true);
+        Cell cell = document.WorkbookPart!.WorksheetParts.Single().Worksheet!
+            .Descendants<Cell>().Single(candidate => candidate.CellReference?.Value == reference);
+        cell.DataType = null;
     }
 
     private static void CreateWorkbook(
