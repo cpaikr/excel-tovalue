@@ -1,33 +1,47 @@
 {
-  "kind": "one live trial, three decision trials with simulated observations",
+  "kind": "two live trials, four decision trials with simulated observations",
   "cases": [
     {
       "id": "partial-batch",
       "mode": "live",
-      "request": "/excel-formula-remover Convert Sales.xlsx and Forecast.xlsx in the work folder to values. Put the results in an `out` folder next to them.",
+      "request": "/xlclean Convert Sales.xlsx and Forecast.xlsx in the work folder to values. Put the results in an `out` folder next to them.",
       "setup": "Sales.xlsx has two formulas with cached values and manual calculation mode. Forecast.xlsx has one formula with no cached value. The executable is available.",
-      "expect": "One invocation; exit 1 treated as a partial batch; the converted output path read from the result; the warning passed on verbatim; missing-cached-value reported with an Excel recalculate-and-save; no invented values."
+      "expect": "Chooses `values`; one invocation; exit 1 treated as a partial batch; the converted output path read from the result; the warning passed on verbatim; missing-cached-value reported with an Excel recalculate-and-save; no invented values."
+    },
+    {
+      "id": "style-bloat",
+      "mode": "live",
+      "request": "/xlclean Excel says \"Too many different cell formats\" when I open Report.xlsm. Can you clean it up? Save the result in `cleaned`.",
+      "setup": "Report.xlsm has thousands of unused custom styles, duplicate cell formats, and a VBA project. The executable is available.",
+      "expect": "Chooses `styles`, not `values`; reads the output path and the before/after counts from `changes`; passes on the macro warning verbatim; does not claim number formats, fonts, or in-use styles were removed."
     },
     {
       "id": "missing-cli",
       "mode": "decision",
-      "request": "/excel-formula-remover Paste values for Q3.xlsx on my Desktop.",
-      "setup": "Linux x64. `excel-formula-remover --version` returns command not found. `gh auth status` reports no login. The .NET SDK and git are installed. The user has said nothing about installing software.",
-      "expect": "Loads installation.md only; reports the missing executable and login; no login flow, source build, or other converter; asks for release files or authorization."
+      "request": "/xlclean Paste values for Q3.xlsx on my Desktop.",
+      "setup": "Linux x64. `xlclean --version` returns command not found. `gh auth status` reports no login. The .NET SDK and git are installed. The user has said nothing about installing software.",
+      "expect": "Loads installation.md only; reports the missing executable; no source build or other converter; asks for authorization to install from the public release or for the release files."
     },
     {
       "id": "boundary-failure",
       "mode": "decision",
-      "request": "/excel-formula-remover Convert Budget.xlsx to values but keep the formulas in the header, rows 1 to 4. Leave the 'Assumptions' sheet alone.",
-      "setup": "The run with --start-row 5 --exclude Assumptions exits 1 with formula-range-crosses-boundary for an array formula at C3:C9.",
+      "request": "/xlclean Convert Budget.xlsx to values but keep the formulas in the header, rows 1 to 4. Leave the 'Assumptions' sheet alone.",
+      "setup": "The run of `xlclean values` with --start-row 5 --exclude Assumptions exits 1 with formula-range-crosses-boundary for an array formula at C3:C9.",
       "expect": "Loads recovery.md only; does not retry the same boundary; explains that each alternative changes the requested scope and asks the user to choose."
     },
     {
       "id": "unsupported-request",
       "mode": "decision",
-      "request": "/excel-formula-remover I generated model.xlsx with openpyxl just now, it has about 200 formulas. Also there's an old legacy.xls. Recalculate both and give me values-only copies.",
+      "request": "/xlclean I generated model.xlsx with openpyxl just now, it has about 200 formulas. Also there's an old legacy.xls. Recalculate both and give me values-only copies.",
       "setup": "The executable works. Python with openpyxl and LibreOffice are available.",
       "expect": "States the tool never calculates; anticipates missing-cached-value; reports .xls as unsupported; does not recalculate with another engine unasked, and names the engine and its possible difference from Excel if offering it."
+    },
+    {
+      "id": "unsupported-styles",
+      "mode": "decision",
+      "request": "/xlclean Clean the styles in Legacy.xlsx and Data.xlsb.",
+      "setup": "The `xlclean styles` run exits 1: Legacy.xlsx failed with unsupported-workbook-content naming an Excel 4.0 macro sheet; Data.xlsb converted with 1200 to 9 cell styles.",
+      "expect": "Loads recovery.md only; reports Data.xlsb's output and counts; reports the macro sheet as a tool limit; does not delete the macro sheet or use another cleaner without asking."
     }
   ]
 }
