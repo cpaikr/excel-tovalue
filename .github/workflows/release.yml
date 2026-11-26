@@ -65,5 +65,5 @@ jobs:
           esac
           gh release create "$TAG" release/* \
             --verify-tag \
-            --title "Excel Formula Remover $VERSION" \
+            --title "xlclean $VERSION" \
             --generate-notes $channel

@@ -15,8 +15,8 @@ if ($Version.Length -gt 128 -or $Version -cnotmatch $semanticVersionPattern) {
 }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$guiProject = Join-Path $repositoryRoot 'src/ExcelFormulaRemover.App/ExcelFormulaRemover.App.csproj'
-$cliProject = Join-Path $repositoryRoot 'src/ExcelFormulaRemover.Cli/ExcelFormulaRemover.Cli.csproj'
+$guiProject = Join-Path $repositoryRoot 'src/XlClean.App/XlClean.App.csproj'
+$cliProject = Join-Path $repositoryRoot 'src/XlClean.Cli/XlClean.Cli.csproj'
 $publishRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot 'artifacts/publish'))
 $versionDirectory = [System.IO.Path]::GetFullPath((Join-Path $publishRoot $Version))
 $pathSeparators = [char[]] @(
@@ -87,8 +87,8 @@ $desktopNotices = [ordered] @{
 # The CLI targets this release claims. Each is certified by test-artifact.ps1
 # on its own operating system before the release is published.
 $cliTargets = @(
-    @{ Runtime = 'win-x64'; Executable = 'excel-formula-remover.exe'; Extension = 'zip' }
-    @{ Runtime = 'linux-x64'; Executable = 'excel-formula-remover'; Extension = 'tar.gz' }
+    @{ Runtime = 'win-x64'; Executable = 'xlclean.exe'; Extension = 'zip' }
+    @{ Runtime = 'linux-x64'; Executable = 'xlclean'; Extension = 'tar.gz' }
 )
 
 New-Item -ItemType Directory -Path $guiOutput, $bundleDirectory | Out-Null
@@ -217,7 +217,7 @@ try {
         Copy-Item -LiteralPath $licensePath -Destination $cliOutput
         New-ThirdPartyNotices -Project $cliProject -Runtime $runtime `
             -Frameworks 'Microsoft.NETCore.App' -Destination (Join-Path $cliOutput $noticesName)
-        $archive = Join-Path $bundleDirectory "excel-formula-remover-cli-$Version-$runtime.$($target.Extension)"
+        $archive = Join-Path $bundleDirectory "xlclean-cli-$Version-$runtime.$($target.Extension)"
         if ($target.Extension -eq 'zip') {
             Compress-Archive -DestinationPath $archive -CompressionLevel Optimal -LiteralPath @(
                 $published[0].FullName
@@ -269,7 +269,7 @@ try {
     New-ThirdPartyNotices -Project $guiProject -Runtime 'win-x64' `
         -Frameworks 'Microsoft.NETCore.App', 'Microsoft.WindowsDesktop.App' `
         -Destination (Join-Path $guiOutput $noticesName) -VendoredNotices $desktopNotices
-    $guiArchive = Join-Path $bundleDirectory "excel-formula-remover-gui-$Version-win-x64.zip"
+    $guiArchive = Join-Path $bundleDirectory "xlclean-gui-$Version-win-x64.zip"
     Compress-Archive -Path (Join-Path $guiOutput '*') -DestinationPath $guiArchive -CompressionLevel Optimal
     $archives += $guiArchive
 

@@ -1,4 +1,4 @@
-# Verify a Windows excel-formula-remover installation from a process outside
+# Verify a Windows xlclean installation from a process outside
 # the caller's process tree, then print the evidence.
 #
 # A shell spawned by a packaged (MSIX) desktop app can see redirected files
@@ -6,7 +6,7 @@
 # through the Windows management service, whose child is not a descendant of
 # the calling app, and reports what that independent process observed.
 param(
-    [string]$BinDirectory = (Join-Path $env:LOCALAPPDATA 'excel-formula-remover\bin'),
+    [string]$BinDirectory = (Join-Path $env:LOCALAPPDATA 'xlclean\bin'),
     [string]$ExpectedVersion,
     [string]$Out
 )
@@ -17,7 +17,7 @@ if (-not $Out) {
     # so resolve a relative directory here.
     $BinDirectory = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($BinDirectory)
     # The user profile root is not subject to AppData redirection.
-    $Out = Join-Path $env:USERPROFILE ('.excel-formula-remover-verify-' + [Guid]::NewGuid().ToString('N') + '.txt')
+    $Out = Join-Path $env:USERPROFILE ('.xlclean-verify-' + [Guid]::NewGuid().ToString('N') + '.txt')
     # The inbox Windows PowerShell host is never a packaged app, unlike the
     # caller's own host when PowerShell came from the Microsoft Store.
     $shell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -66,7 +66,7 @@ try {
     Say "process ancestry: $($ancestry -join ' <- ')"
     Check 'independent of packaged apps' (-not $packaged) ''
 
-    $exe = [IO.Path]::GetFullPath((Join-Path $BinDirectory 'excel-formula-remover.exe'))
+    $exe = [IO.Path]::GetFullPath((Join-Path $BinDirectory 'xlclean.exe'))
     $visible = Test-Path -LiteralPath $exe -PathType Leaf
     Check 'file visible' $visible $exe
     if ($visible) {
@@ -74,19 +74,19 @@ try {
         $null = & $exe --help
         Check 'full-path --help' ($LASTEXITCODE -eq 0) "exit $LASTEXITCODE"
         $version = (& $exe --version) -join ' '
-        $versionOk = $LASTEXITCODE -eq 0 -and (-not $ExpectedVersion -or $version -eq "excel-formula-remover $ExpectedVersion")
+        $versionOk = $LASTEXITCODE -eq 0 -and (-not $ExpectedVersion -or $version -eq "xlclean $ExpectedVersion")
         Check 'full-path --version' $versionOk $version
     }
 
     # Resolve the command as a newly opened terminal would, from the persisted PATH.
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-    $commands = @(Get-Command excel-formula-remover -All -ErrorAction SilentlyContinue)
-    Say "Get-Command excel-formula-remover -All: $(($commands | ForEach-Object { "$($_.CommandType):$($_.Source)" }) -join ' | ')"
+    $commands = @(Get-Command xlclean -All -ErrorAction SilentlyContinue)
+    Say "Get-Command xlclean -All: $(($commands | ForEach-Object { "$($_.CommandType):$($_.Source)" }) -join ' | ')"
     $first = $commands | Select-Object -First 1
     $resolves = $null -ne $first -and $first.CommandType -eq 'Application' -and $first.Source -ieq $exe
     Check 'command resolves to this executable' $resolves ''
     if ($resolves) {
-        $null = excel-formula-remover --help
+        $null = xlclean --help
         Check 'command-name --help' ($LASTEXITCODE -eq 0) "exit $LASTEXITCODE"
     }
 } catch {

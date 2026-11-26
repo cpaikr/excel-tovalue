@@ -16,17 +16,17 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$testProject = Join-Path $repositoryRoot 'tests/ExcelFormulaRemover.Cli.Tests/ExcelFormulaRemover.Cli.Tests.csproj'
+$testProject = Join-Path $repositoryRoot 'tests/XlClean.Cli.Tests/XlClean.Cli.Tests.csproj'
 $ReleaseDirectory = (Resolve-Path -LiteralPath $ReleaseDirectory).ProviderPath
 $checksums = Join-Path $ReleaseDirectory 'SHA256SUMS.txt'
 
 if ($IsWindows) {
-    $archive = Join-Path $ReleaseDirectory "excel-formula-remover-cli-$Version-win-x64.zip"
-    $executableName = 'excel-formula-remover.exe'
+    $archive = Join-Path $ReleaseDirectory "xlclean-cli-$Version-win-x64.zip"
+    $executableName = 'xlclean.exe'
 }
 elseif ($IsLinux) {
-    $archive = Join-Path $ReleaseDirectory "excel-formula-remover-cli-$Version-linux-x64.tar.gz"
-    $executableName = 'excel-formula-remover'
+    $archive = Join-Path $ReleaseDirectory "xlclean-cli-$Version-linux-x64.tar.gz"
+    $executableName = 'xlclean'
 }
 else {
     throw 'No CLI archive is published for this operating system.'
@@ -93,8 +93,8 @@ try {
         throw "The installer left unexpected entries: $($leftovers.Name -join ', ')"
     }
 
-    $env:EXCEL_FORMULA_REMOVER_EXE = $executable
-    $env:EXCEL_FORMULA_REMOVER_EXPECTED_VERSION = $Version
+    $env:XLCLEAN_EXE = $executable
+    $env:XLCLEAN_EXPECTED_VERSION = $Version
     try {
         Write-Host "> dotnet test (process contract) against $executable"
         & dotnet test $testProject --configuration Release `
@@ -112,7 +112,7 @@ try {
         }
     }
     finally {
-        Remove-Item Env:EXCEL_FORMULA_REMOVER_EXE, Env:EXCEL_FORMULA_REMOVER_EXPECTED_VERSION
+        Remove-Item Env:XLCLEAN_EXE, Env:XLCLEAN_EXPECTED_VERSION
     }
 
     Write-Host "Artifact '$archiveName' passed installation and process contract checks."

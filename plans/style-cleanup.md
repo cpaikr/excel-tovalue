@@ -245,10 +245,12 @@ xlclean <command> --help
 ## Order
 
 1. **Rename to xlclean** with no behavior change: projects, namespaces,
-   executables, scripts, installers, release workflow, skill, PLAN,
-   CLAUDE.md. Merge to `main`; no release. The README installation section
-   and the skill's installation reference keep describing the published 3.x
-   release until step 8, so `main` never points at assets that do not exist.
+   executables, scripts, installers, release workflow, PLAN, CLAUDE.md, and
+   the README's development sections. Merge to `main`; no release. The
+   README's installation, usage, and skill sections and the skill itself keep
+   describing the published 3.x release until step 8, so `main` never points
+   at assets that do not exist. `npx skills add` installs the skill from
+   `main`, so the skill directory moves to `skills/xlclean` only at step 8.
 2. **Subcommands** with `values` and the new JSON envelope. Update the skill
    and its evals for the new commands and fields.
 3. **Shared pipeline extraction.** Existing tests pass unchanged in meaning.
@@ -258,8 +260,9 @@ xlclean <command> --help
 7. **Documentation**: README sections for `styles`, the skill's guidance on
    when to use it and how to read `changes`, PLAN validation.
 8. **Release 4.0.0**: Excel round trip, rename the GitHub repository, switch
-   the installation docs to `xlclean`, tag, then verify the documented install
-   from an independent process.
+   the installation docs to `xlclean`, move the skill to `skills/xlclean` with
+   its evals, tag, then verify the documented install from an independent
+   process.
 9. **GUI** (4.1.0): operation selector in the WinForms app.
 
 Steps 1 to 3 change no behavior beyond the CLI shape and can be reviewed

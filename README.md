@@ -242,7 +242,7 @@ excel-formula-remover `
 
 ```powershell
 dotnet run `
-  --project .\src\ExcelFormulaRemover.Cli\ExcelFormulaRemover.Cli.csproj `
+  --project .\src\XlClean.Cli\XlClean.Cli.csproj `
   -- `
   --output .\converted .\Book.xlsx
 ```
@@ -273,6 +273,12 @@ Copy-Item -Recurse .\skills\excel-formula-remover "$HOME\.agents\skills\"
 절차를 따르게 합니다.
 
 ## 개발과 검증
+
+`main` 브랜치는 다음 릴리스(4.0.0)를 개발 중입니다. 이 릴리스에서 도구 이름이
+`xlclean`으로 바뀌고 스타일 정리 기능이 추가됩니다
+([plans/style-cleanup.md](plans/style-cleanup.md)). 소스에서 빌드한 실행 파일과
+릴리스 산출물은 이미 `xlclean` 이름을 씁니다. 위의 설치·사용·스킬 안내는 게시된
+3.x 릴리스 기준이며 4.0.0 릴리스 때 바뀝니다.
 
 필수 도구는 `global.json`에 지정된 .NET SDK `10.0.110`, PowerShell 7, 그리고
 PATH에서 실행 가능한 `rumdl`입니다. 새 클론에서 전체 검증은 다음 한 명령으로
@@ -314,16 +320,16 @@ pwsh -NoProfile -File ./scripts/test-artifact.ps1 artifacts/publish/1.0.0 1.0.0
 ## 릴리스 산출물 계약
 
 `publish.ps1`은 기존 버전 디렉터리를 변경하지 않으며 다음 파일만
-`artifacts/publish/<version>/`에 게시합니다.
+`artifacts/publish/<version>/`에 게시합니다. 3.x 릴리스의 자산 이름은
+`xlclean` 대신 `excel-formula-remover`, GUI 실행 파일은
+`ExcelFormulaRemover.exe`입니다.
 
-- `excel-formula-remover-gui-<version>-win-x64.zip`: Windows x64용 자체 포함,
-  단일 파일 GUI
-- `excel-formula-remover-cli-<version>-win-x64.zip`: Windows x64용 자체 포함,
-  단일 파일 CLI(`excel-formula-remover.exe`, `LICENSE.md`,
-  `THIRD-PARTY-NOTICES.txt`)
-- `excel-formula-remover-cli-<version>-linux-x64.tar.gz`: Linux x64(glibc)용
-  자체 포함, 단일 파일 CLI(`excel-formula-remover`, `LICENSE.md`,
-  `THIRD-PARTY-NOTICES.txt`)
+- `xlclean-gui-<version>-win-x64.zip`: Windows x64용 자체 포함, 단일 파일
+  GUI(`XlClean.exe`)
+- `xlclean-cli-<version>-win-x64.zip`: Windows x64용 자체 포함, 단일 파일
+  CLI(`xlclean.exe`, `LICENSE.md`, `THIRD-PARTY-NOTICES.txt`)
+- `xlclean-cli-<version>-linux-x64.tar.gz`: Linux x64(glibc)용 자체 포함, 단일
+  파일 CLI(`xlclean`, `LICENSE.md`, `THIRD-PARTY-NOTICES.txt`)
 - `SHA256SUMS.txt`: 세 압축 파일의 SHA-256 체크섬
 - `install.ps1`, `install.sh`, `verify-windows-install.ps1`: CLI 설치와 설치
   확인 스크립트
@@ -343,13 +349,13 @@ SmartScreen 경고가 표시될 수 있으므로 신뢰하는 배포 경로에�
 
 ```text
 src/
-  ExcelFormulaRemover.Core/       OpenXML·XLSB 변환 엔진과 결과 모델
-  ExcelFormulaRemover.Cli/        비대화식 CLI 어댑터
-  ExcelFormulaRemover.App/        Windows WinForms GUI
+  XlClean.Core/                   OpenXML·XLSB 변환 엔진과 결과 모델
+  XlClean.Cli/                    비대화식 CLI 어댑터
+  XlClean.App/                    Windows WinForms GUI
 tests/
-  ExcelFormulaRemover.Core.Tests/ 변환 안전성·충실도 테스트
-  ExcelFormulaRemover.Cli.Tests/  파싱·출력·종료 코드와 프로세스 계약 테스트
-  ExcelFormulaRemover.App.Tests/  GUI 지원 로직·수명 주기 테스트
+  XlClean.Core.Tests/             변환 안전성·충실도 테스트
+  XlClean.Cli.Tests/              파싱·출력·종료 코드와 프로세스 계약 테스트
+  XlClean.App.Tests/              GUI 지원 로직·수명 주기 테스트
 skills/
   excel-formula-remover/          AI 에이전트용 CLI 소비자 스킬
 scripts/
@@ -361,6 +367,7 @@ scripts/
 PLAN.md                           현재 프로젝트 상태와 제약
 plans/rewrite.md                  2026 재작성 설계 기록
 plans/agent-cli.md                에이전트용 CLI와 스킬 설계 기록
+plans/style-cleanup.md            xlclean 이름 변경과 스타일 정리 설계
 ```
 
 `Core`와 `Cli`는 `net10.0`이며 Windows API에 의존하지 않습니다. 게시하는 CLI

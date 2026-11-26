@@ -1,8 +1,0 @@
-<Solution>
-  <Project Path="src/ExcelFormulaRemover.App/ExcelFormulaRemover.App.csproj" />
-  <Project Path="src/ExcelFormulaRemover.Cli/ExcelFormulaRemover.Cli.csproj" />
-  <Project Path="src/ExcelFormulaRemover.Core/ExcelFormulaRemover.Core.csproj" />
-  <Project Path="tests/ExcelFormulaRemover.Cli.Tests/ExcelFormulaRemover.Cli.Tests.csproj" />
-  <Project Path="tests/ExcelFormulaRemover.Core.Tests/ExcelFormulaRemover.Core.Tests.csproj" />
-  <Project Path="tests/ExcelFormulaRemover.App.Tests/ExcelFormulaRemover.App.Tests.csproj" />
-</Solution>

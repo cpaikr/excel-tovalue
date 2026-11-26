@@ -5,9 +5,9 @@
 - 저장소의 기준 검증 명령은
   `pwsh -NoProfile -File .\scripts\check.ps1`이다. 코드나 Markdown을
   수정한 뒤에는 필요하면 `scripts/format.ps1`로 포맷하고 기준 검증을 실행한다.
-- `ExcelFormulaRemover.Core`와 `ExcelFormulaRemover.Cli`는 Windows API에
+- `XlClean.Core`와 `XlClean.Cli`는 Windows API에
   의존하지 않게 유지한다. WinForms와 Windows 전용 동작은
-  `ExcelFormulaRemover.App`에만 둔다.
+  `XlClean.App`에만 둔다.
 - 수식을 계산하지 않는다. Excel 파일에 마지막으로 저장된 계산값만 사용한다.
 - 원본이나 기존 출력을 덮어쓰지 않는다. 파일별 임시 복사본을 검증한 뒤
   원자적으로 게시하며, 저장값 누락이나 안전하지 않은 범위 경계는 부분 출력 없는

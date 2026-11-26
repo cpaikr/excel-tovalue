@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$solutionPath = Join-Path $repositoryRoot 'ExcelFormulaRemover.slnx'
+$solutionPath = Join-Path $repositoryRoot 'XlClean.slnx'
 $testResultsDirectory = Join-Path $repositoryRoot 'artifacts/test-results'
 
 function Invoke-NativeCommand {
