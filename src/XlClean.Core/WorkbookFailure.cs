@@ -28,6 +28,12 @@ public enum WorkbookFailureKind
 
     /// <summary>An unexpected error occurred.</summary>
     Unexpected,
+
+    /// <summary>
+    /// The workbook holds content that may reference what the operation rewrites, in a form the
+    /// operation does not rewrite, so it cannot prove the result equivalent.
+    /// </summary>
+    UnsupportedWorkbookContent,
 }
 
 /// <summary>

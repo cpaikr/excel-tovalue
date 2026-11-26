@@ -312,6 +312,7 @@ public sealed class CliApplicationTests
     [DataRow(WorkbookFailureKind.InvalidWorkbook, "invalid-workbook")]
     [DataRow(WorkbookFailureKind.FileAccess, "file-access")]
     [DataRow(WorkbookFailureKind.Unexpected, "unexpected")]
+    [DataRow(WorkbookFailureKind.UnsupportedWorkbookContent, "unsupported-workbook-content")]
     public async Task FailureKindsUseStableIdentifiers(WorkbookFailureKind kind, string expected)
     {
         Invocation invocation = await Invoke(
