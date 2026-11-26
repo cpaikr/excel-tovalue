@@ -1,5 +1,6 @@
 namespace XlClean.Cli;
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security;
@@ -22,12 +23,51 @@ internal static class CliApplication
 
     private const string CommandName = "xlclean";
 
-    private const string HelpText =
+    private const string RootHelpText =
         """
-        Remove Excel formulas by replacing them with their last saved cached values.
+        Clean Excel workbooks into new files without modifying the originals.
 
         Usage:
-          xlclean --output <directory> [options] <workbook>...
+          xlclean <command> [options] <workbook>...
+          xlclean <command> --help
+
+        Commands:
+          values  Replace formulas with their last saved cached values.
+
+        Options:
+          -h, --help     Show this help, or a command's help after its name.
+              --version  Show the version.
+
+        Output: every command run writes one JSON document on stdout, followed by
+        a newline; stderr stays empty.
+          ok       true only when every workbook succeeded (exit code 0).
+          version  The version of this executable.
+          command  The command that ran, or null when no valid command was given.
+          files    One entry per attempted workbook, in request order: input, status
+                   ("converted" or "failed"), output (the published path), failure
+                   (kind and message), changes (counts specific to the command,
+                   see its help; null for a failed workbook), warnings.
+          summary  total, succeeded, failed, canceled.
+          error    Set when the invocation itself failed (kind "usage" or
+                   "unexpected"); files is then empty.
+
+        Exit codes:
+          0  Every workbook succeeded, or help or version was printed.
+          1  One or more workbooks failed, or the run failed (see error).
+          2  Command-line usage error.
+        130  Canceled; files completed before cancellation are still reported.
+
+        Sources and existing outputs are never overwritten, so read each output
+        path from the result instead of predicting its name.
+
+        """;
+
+    private const string ValuesHelpText =
+        """
+        Replace Excel formulas with their last saved cached values.
+
+        Usage:
+          xlclean values --output <directory> [options] <workbook>...
 
         Options:
           -o, --output <directory>  Required destination directory.
@@ -39,28 +79,16 @@ internal static class CliApplication
 
         Input: .xlsx, .xlsm, and .xlsb workbooks. Each output keeps its input format.
 
-        Output: one JSON document on stdout, followed by a newline; stderr stays empty.
-          ok       true only when every workbook converted (exit code 0).
-          version  The version of this executable.
-          files    One entry per attempted workbook, in request order: input, status
-                   ("converted" or "failed"), output (the published path), failure
-                   (kind and message), removed-formula and sheet counts, warnings.
-          summary  total, succeeded, failed, canceled.
-          error    Set when the invocation itself failed (kind "usage" or
-                   "unexpected"); files is then empty.
+        changes: removedFormulas, removedTableFormulaDefinitions, processedSheets,
+          excludedSheets.
 
         Failure kinds: invalid-input, missing-cached-value,
           formula-range-crosses-boundary, invalid-workbook, file-access, unexpected.
 
-        Exit codes:
-          0  Every workbook converted, or help or version was printed.
-          1  One or more conversions failed, or the run failed (see error).
-          2  Command-line usage error.
-        130  Canceled; files completed before cancellation are still reported.
-
         The tool does not calculate formulas. Recalculate and save workbooks in
-        Excel before use. Sources and existing outputs are never overwritten, so
-        read each output path from the result instead of predicting its name.
+        Excel before use.
+
+        Run 'xlclean --help' for the output document and exit codes.
 
         """;
 
@@ -106,7 +134,13 @@ internal static class CliApplication
         CommandLineParseResult parseResult = CommandLineParser.Parse(arguments);
         if (parseResult.Kind == CommandLineParseKind.Help)
         {
-            await standardOutput.WriteAsync(HelpText.ReplaceLineEndings("\n")).ConfigureAwait(false);
+            string help = parseResult.Command switch
+            {
+                null => RootHelpText,
+                CliCommand.Values => ValuesHelpText,
+                _ => throw new UnreachableException(),
+            };
+            await standardOutput.WriteAsync(help.ReplaceLineEndings("\n")).ConfigureAwait(false);
             return SuccessExitCode;
         }
 
@@ -120,12 +154,14 @@ internal static class CliApplication
         {
             await WriteInvocationError(
                 standardOutput,
+                parseResult.Command,
                 "usage",
                 parseResult.ErrorMessage!,
-                $"Run {CommandName} --help").ConfigureAwait(false);
+                HelpHint(parseResult.Command)).ConfigureAwait(false);
             return UsageErrorExitCode;
         }
 
+        CliCommand command = parseResult.Command!.Value;
         CommandLineOptions options = parseResult.Options!;
         FormulaRemovalRequest request;
         try
@@ -141,9 +177,10 @@ internal static class CliApplication
         {
             await WriteInvocationError(
                 standardOutput,
+                command,
                 "usage",
                 exception.Message,
-                $"Run {CommandName} --help").ConfigureAwait(false);
+                HelpHint(command)).ConfigureAwait(false);
             return UsageErrorExitCode;
         }
 
@@ -154,26 +191,28 @@ internal static class CliApplication
                 null,
                 cancellationToken).ConfigureAwait(false);
 
-            await WriteBatchResult(standardOutput, result, canceled: false).ConfigureAwait(false);
+            await WriteBatchResult(standardOutput, command, result, canceled: false).ConfigureAwait(false);
             return result.FailedCount == 0 ? SuccessExitCode : ConversionFailureExitCode;
         }
         catch (FormulaRemovalCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
             await WriteBatchResult(
                 standardOutput,
+                command,
                 exception.CompletedResult,
                 canceled: true).ConfigureAwait(false);
             return CanceledExitCode;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await WriteBatchResult(standardOutput, new([]), canceled: true).ConfigureAwait(false);
+            await WriteBatchResult(standardOutput, command, new([]), canceled: true).ConfigureAwait(false);
             return CanceledExitCode;
         }
         catch (Exception exception)
         {
             await WriteInvocationError(
                 standardOutput,
+                command,
                 "unexpected",
                 exception.Message,
                 "Check paths and permissions, then retry.").ConfigureAwait(false);
@@ -183,12 +222,14 @@ internal static class CliApplication
 
     private static Task WriteBatchResult(
         TextWriter output,
+        CliCommand command,
         FormulaRemovalBatchResult result,
         bool canceled) =>
         WriteDocument(output, writer =>
         {
             writer.WriteBoolean("ok", !canceled && result.FailedCount == 0);
             writer.WriteString("version", Version);
+            writer.WriteString("command", FormatCommand(command));
             writer.WriteStartArray("files");
             foreach (FormulaRemovalFileResult file in result.Files)
             {
@@ -208,12 +249,22 @@ internal static class CliApplication
                     writer.WriteEndObject();
                 }
 
-                writer.WriteNumber("removedFormulas", file.RemovedFormulaCount);
-                writer.WriteNumber(
-                    "removedTableFormulaDefinitions",
-                    file.RemovedTableFormulaDefinitionCount);
-                writer.WriteNumber("processedSheets", file.ProcessedSheetCount);
-                writer.WriteNumber("excludedSheets", file.ExcludedSheetCount);
+                // A failed file published nothing, so it has no changes to report.
+                if (file.Succeeded)
+                {
+                    writer.WriteStartObject("changes");
+                    writer.WriteNumber("removedFormulas", file.RemovedFormulaCount);
+                    writer.WriteNumber(
+                        "removedTableFormulaDefinitions",
+                        file.RemovedTableFormulaDefinitionCount);
+                    writer.WriteNumber("processedSheets", file.ProcessedSheetCount);
+                    writer.WriteNumber("excludedSheets", file.ExcludedSheetCount);
+                    writer.WriteEndObject();
+                }
+                else
+                {
+                    writer.WriteNull("changes");
+                }
                 writer.WriteStartArray("warnings");
                 foreach (string warning in file.Warnings)
                 {
@@ -231,6 +282,7 @@ internal static class CliApplication
 
     private static Task WriteInvocationError(
         TextWriter output,
+        CliCommand? command,
         string kind,
         string message,
         string help) =>
@@ -238,6 +290,15 @@ internal static class CliApplication
         {
             writer.WriteBoolean("ok", false);
             writer.WriteString("version", Version);
+            if (command is { } known)
+            {
+                writer.WriteString("command", FormatCommand(known));
+            }
+            else
+            {
+                writer.WriteNull("command");
+            }
+
             writer.WriteStartArray("files");
             writer.WriteEndArray();
             WriteSummary(writer, total: 0, succeeded: 0, failed: 0, canceled: false);
@@ -279,6 +340,13 @@ internal static class CliApplication
         string document = Encoding.UTF8.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
         await output.WriteAsync(document + "\n").ConfigureAwait(false);
     }
+
+    private static string HelpHint(CliCommand? command) =>
+        command is { } known
+            ? $"Run {CommandName} {FormatCommand(known)} --help"
+            : $"Run {CommandName} --help";
+
+    private static string FormatCommand(CliCommand command) => CommandLineParser.NameOf(command);
 
     private static string FormatFailureKind(FormulaRemovalFailureKind failureKind) =>
         failureKind switch

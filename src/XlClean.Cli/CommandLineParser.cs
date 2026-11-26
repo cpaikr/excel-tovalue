@@ -6,6 +6,17 @@ using XlClean.Core;
 
 internal static class CommandLineParser
 {
+    private static readonly Dictionary<string, CliCommand> Commands =
+        Enum.GetValues<CliCommand>().ToDictionary(NameOf, StringComparer.Ordinal);
+
+    /// <summary>The command name as typed and as reported in the JSON result.</summary>
+    public static string NameOf(CliCommand command) =>
+        command switch
+        {
+            CliCommand.Values => "values",
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+        };
+
     public static CommandLineParseResult Parse(IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
@@ -13,11 +24,54 @@ internal static class CommandLineParser
         // A bare invocation is the root help, so there is one command inventory.
         if (arguments.Count == 0)
         {
-            return CommandLineParseResult.Help();
+            return CommandLineParseResult.Help(null);
         }
 
-        // Help wins over version, and both win over malformed arguments, so
-        // discovery never depends on the rest of the command line being valid.
+        if (!Commands.TryGetValue(arguments[0], out CliCommand command))
+        {
+            return ParseRoot(arguments);
+        }
+
+        IReadOnlyList<string> commandArguments = [.. arguments.Skip(1)];
+        CommandLineParseResult? discovery = ParseDiscovery(commandArguments, command);
+        return discovery ?? command switch
+        {
+            CliCommand.Values => ParseValues(commandArguments),
+            _ => throw new UnreachableException(),
+        };
+    }
+
+    // Without a command only discovery works. An option first is the 3.x
+    // flat form, so the error names the command that replaced it.
+    private static CommandLineParseResult ParseRoot(IReadOnlyList<string> arguments)
+    {
+        CommandLineParseResult? discovery = ParseDiscovery(arguments, null);
+        if (discovery is not null)
+        {
+            return discovery;
+        }
+
+        string first = arguments[0];
+        if (first == "--")
+        {
+            return CommandLineParseResult.Failure(
+                "A command is required; for example 'xlclean values --output <directory> <workbook>...'.",
+                null);
+        }
+
+        return first.StartsWith('-')
+            ? CommandLineParseResult.Failure(
+                $"A command is required before options; for example 'xlclean values {first} ...'.",
+                null)
+            : CommandLineParseResult.Failure($"Unknown command '{first}'.", null);
+    }
+
+    // Help wins over version, and both win over malformed arguments, so
+    // discovery never depends on the rest of the command line being valid.
+    private static CommandLineParseResult? ParseDiscovery(
+        IReadOnlyList<string> arguments,
+        CliCommand? command)
+    {
         bool versionRequested = false;
         foreach (string argument in arguments)
         {
@@ -28,17 +82,17 @@ internal static class CommandLineParser
 
             if (argument is "--help" or "-h")
             {
-                return CommandLineParseResult.Help();
+                return CommandLineParseResult.Help(command);
             }
 
             versionRequested |= argument == "--version";
         }
 
-        if (versionRequested)
-        {
-            return CommandLineParseResult.Version();
-        }
+        return versionRequested ? CommandLineParseResult.Version() : null;
+    }
 
+    private static CommandLineParseResult ParseValues(IReadOnlyList<string> arguments)
+    {
         string? outputDirectory = null;
         int startRow = 1;
         bool startRowWasSet = false;
@@ -79,7 +133,7 @@ internal static class CommandLineParser
                 string? value = ReadFollowingValue(arguments, ref index);
                 if (value is null)
                 {
-                    return CommandLineParseResult.Failure($"Option '{argument}' requires a value.");
+                    return CommandLineParseResult.ValuesFailure($"Option '{argument}' requires a value.");
                 }
 
                 CommandLineParseResult? failure = argument switch
@@ -99,7 +153,7 @@ internal static class CommandLineParser
 
             if (!optionsEnded && argument.StartsWith('-'))
             {
-                return CommandLineParseResult.Failure($"Unknown option '{argument}'.");
+                return CommandLineParseResult.ValuesFailure($"Unknown option '{argument}'.");
             }
 
             inputPaths.Add(argument);
@@ -107,15 +161,15 @@ internal static class CommandLineParser
 
         if (outputDirectory is null)
         {
-            return CommandLineParseResult.Failure("Required option '--output' was not provided.");
+            return CommandLineParseResult.ValuesFailure("Required option '--output' was not provided.");
         }
 
         if (inputPaths.Count == 0)
         {
-            return CommandLineParseResult.Failure("At least one input workbook is required.");
+            return CommandLineParseResult.ValuesFailure("At least one input workbook is required.");
         }
 
-        return CommandLineParseResult.Success(new CommandLineOptions(
+        return CommandLineParseResult.Success(CliCommand.Values, new CommandLineOptions(
             inputPaths.AsReadOnly(),
             outputDirectory,
             startRow,
@@ -134,13 +188,13 @@ internal static class CommandLineParser
     {
         if (option is not ("--output" or "--start-row" or "--exclude"))
         {
-            return CommandLineParseResult.Failure($"Unknown option '{option}'.");
+            return CommandLineParseResult.ValuesFailure($"Unknown option '{option}'.");
         }
 
         string? value = inlineValue ?? ReadFollowingValue(arguments, ref index);
         if (string.IsNullOrWhiteSpace(value))
         {
-            return CommandLineParseResult.Failure($"Option '{option}' requires a value.");
+            return CommandLineParseResult.ValuesFailure($"Option '{option}' requires a value.");
         }
 
         return option switch
@@ -158,7 +212,7 @@ internal static class CommandLineParser
     {
         if (outputDirectory is not null)
         {
-            return CommandLineParseResult.Failure("Option '--output' was provided more than once.");
+            return CommandLineParseResult.ValuesFailure("Option '--output' was provided more than once.");
         }
 
         outputDirectory = value;
@@ -172,13 +226,13 @@ internal static class CommandLineParser
     {
         if (startRowWasSet)
         {
-            return CommandLineParseResult.Failure("Option '--start-row' was provided more than once.");
+            return CommandLineParseResult.ValuesFailure("Option '--start-row' was provided more than once.");
         }
 
         if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int parsed) ||
             parsed is < 1 or > FormulaRemovalRequest.MaximumRowNumber)
         {
-            return CommandLineParseResult.Failure(
+            return CommandLineParseResult.ValuesFailure(
                 $"Start row must be an integer from 1 to {FormulaRemovalRequest.MaximumRowNumber}.");
         }
 
@@ -193,7 +247,7 @@ internal static class CommandLineParser
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return CommandLineParseResult.Failure("Excluded sheet patterns cannot be blank.");
+            return CommandLineParseResult.ValuesFailure("Excluded sheet patterns cannot be blank.");
         }
 
         excludedPatterns.Add(value);
@@ -247,6 +301,11 @@ internal sealed record CommandLineOptions(
     int StartRow,
     IReadOnlyList<string> ExcludedSheetNamePatterns);
 
+internal enum CliCommand
+{
+    Values,
+}
+
 internal enum CommandLineParseKind
 {
     Success,
@@ -255,20 +314,28 @@ internal enum CommandLineParseKind
     Failure,
 }
 
+/// <param name="Command">
+/// The command the arguments selected. For help it chooses between root and
+/// command help; for a failure it is null when no valid command was given.
+/// </param>
 internal sealed record CommandLineParseResult(
     CommandLineParseKind Kind,
+    CliCommand? Command,
     CommandLineOptions? Options,
     string? ErrorMessage)
 {
-    public static CommandLineParseResult Success(CommandLineOptions options) =>
-        new(CommandLineParseKind.Success, options, null);
+    public static CommandLineParseResult Success(CliCommand command, CommandLineOptions options) =>
+        new(CommandLineParseKind.Success, command, options, null);
 
-    public static CommandLineParseResult Help() =>
-        new(CommandLineParseKind.Help, null, null);
+    public static CommandLineParseResult Help(CliCommand? command) =>
+        new(CommandLineParseKind.Help, command, null, null);
 
     public static CommandLineParseResult Version() =>
-        new(CommandLineParseKind.Version, null, null);
+        new(CommandLineParseKind.Version, null, null, null);
 
-    public static CommandLineParseResult Failure(string message) =>
-        new(CommandLineParseKind.Failure, null, message);
+    public static CommandLineParseResult Failure(string message, CliCommand? command) =>
+        new(CommandLineParseKind.Failure, command, null, message);
+
+    public static CommandLineParseResult ValuesFailure(string message) =>
+        Failure(message, CliCommand.Values);
 }
