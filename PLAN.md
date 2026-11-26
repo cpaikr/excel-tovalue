@@ -56,8 +56,12 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] 4.0.0 documentation: README install, usage, and output for `xlclean`,
   the skill moved to `skills/xlclean` and extended to `styles`, and its
   eval cases. The skill has not been re-evaluated in fresh contexts since.
-- [ ] Release 4.0.0: rename the repository to `cpaikr/xlclean`, merge the
-  documentation, tag, and verify the documented install.
+- [x] Release 4.0.0 (2026-11-26): repository renamed to `cpaikr/xlclean`,
+  documentation merged, `v4.0.0` tagged and published, documented install
+  verified on Windows and Linux.
+- [ ] Re-evaluate the `xlclean` skill in fresh agent contexts
+  ([evals/skill/cases.json](evals/skill/cases.json)), including the two
+  `styles` cases.
 - [ ] Style cleanup in the GUI (4.1.0).
 
 ## Product constraints
@@ -159,6 +163,16 @@ files, without modifying source workbooks or overwriting earlier outputs.
   `10.0.15` runtime pack for its own platform; the GUI file adds the Windows
   Desktop license and the WinForms and WPF notices. The consumer install
   was not repeated for `3.0.2`.
+- `xlclean` 4.0.0 (released 2026-11-26): the release workflow passed version
+  resolution, the Windows and Linux certification jobs, and publication. The
+  release is the latest and not a pre-release. All three archives matched
+  `SHA256SUMS.txt`, and the CLI archive holds `xlclean.exe`, `LICENSE.md`, and
+  `THIRD-PARTY-NOTICES.txt`. The README's Windows commands, run from a scratch
+  folder with a scratch `-BinDirectory`, installed `xlclean 4.0.0`, which
+  cleaned the Excel-saved `.xlsb` fixture. The README's Linux commands
+  installed it under WSL Ubuntu 24.04. The old repository URL redirects to the
+  new one. Not exercised: the default install folders and `PATH`
+  registration, and `verify-windows-install.ps1` from an independent process.
 - Not covered by a test: the notices content. The installers check only the
   CLI archive entry names.
 - Not covered by a test: SIGTERM cancellation.
