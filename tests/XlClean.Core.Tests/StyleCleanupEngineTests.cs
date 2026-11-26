@@ -123,14 +123,14 @@ public sealed class StyleCleanupEngineTests
     }
 
     [TestMethod]
-    public async Task BinaryWorkbooksAreUnsupportedForNow()
+    public async Task UnreadableBinaryWorkbookFailsWithoutOutput()
     {
         string input = Path.Combine(testDirectory, "Book.xlsb");
-        await File.WriteAllTextAsync(input, "not parsed");
+        await File.WriteAllTextAsync(input, "not a package");
 
         StyleCleanupFileResult result = await CleanSingle(input);
 
-        Assert.AreEqual(WorkbookFailureKind.UnsupportedWorkbookContent, result.FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, result.FailureKind);
         Assert.IsNull(result.Changes);
         Assert.IsFalse(Directory.Exists(outputDirectory) && Directory.EnumerateFileSystemEntries(outputDirectory).Any());
     }

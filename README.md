@@ -281,7 +281,7 @@ Copy-Item -Recurse .\skills\excel-formula-remover "$HOME\.agents\skills\"
 릴리스 산출물은 이미 `xlclean` 이름과 `xlclean values`, `xlclean styles` 하위
 명령을 쓰며, JSON 결과에 `command`가 추가되고 파일별 개수는 `changes` 아래로
 옮겨졌습니다. `styles`는 `.xlsx`/`.xlsm`의 사용되지 않는 사용자 지정 셀 스타일과
-셀 서식을 지우고 똑같은 서식을 합칩니다(`.xlsb`는 아직 지원하지 않음). 정확한
+셀 서식을 지우고 똑같은 서식을 합칩니다(`.xlsx`, `.xlsm`, `.xlsb`). 정확한
 형식은 `xlclean --help`와 각 명령의 `--help`가 기준입니다. 위의
 설치·사용·스킬 안내는 게시된 3.x 릴리스 기준이며 4.0.0 릴리스 때 바뀝니다.
 
