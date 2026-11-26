@@ -51,7 +51,7 @@ public sealed class ProcessContractTests
         Assert.AreEqual(0, help.ExitCode);
         Assert.AreEqual(0, bare.ExitCode);
         CollectionAssert.AreEqual(help.StandardOutput, bare.StandardOutput);
-        StringAssert.Contains(help.StandardOutputText, "Usage:");
+        StringAssert.Contains(help.StandardOutputText, "Commands:");
         Assert.EndsWith("\n", help.StandardOutputText);
         Assert.DoesNotContain("\r", help.StandardOutputText);
         Assert.IsEmpty(help.StandardError);
@@ -81,8 +81,8 @@ public sealed class ProcessContractTests
         CreateWorkbook(input, cachedValue: "42");
         byte[] sourceHash = SHA256.HashData(await File.ReadAllBytesAsync(input));
 
-        ProcessResult first = await Run("--output", outputDirectory, input);
-        ProcessResult second = await Run("--output", outputDirectory, input);
+        ProcessResult first = await Run("values", "--output", outputDirectory, input);
+        ProcessResult second = await Run("values", "--output", outputDirectory, input);
 
         Assert.AreEqual(0, first.ExitCode);
         Assert.AreEqual(0, second.ExitCode);
@@ -97,7 +97,8 @@ public sealed class ProcessContractTests
         JsonElement file = root.GetProperty("files")[0];
         Assert.AreEqual(input, file.GetProperty("input").GetString());
         Assert.AreEqual("converted", file.GetProperty("status").GetString());
-        Assert.AreEqual(1, file.GetProperty("removedFormulas").GetInt32());
+        Assert.AreEqual("values", root.GetProperty("command").GetString());
+        Assert.AreEqual(1, file.GetProperty("changes").GetProperty("removedFormulas").GetInt32());
         string firstOutput = file.GetProperty("output").GetString()!;
         string secondOutput = secondDocument.RootElement
             .GetProperty("files")[0].GetProperty("output").GetString()!;
@@ -119,7 +120,7 @@ public sealed class ProcessContractTests
         string outputDirectory = Path.Combine(workingDirectory, "out");
         CreateWorkbook(input, cachedValue: null);
 
-        ProcessResult result = await Run("--output", outputDirectory, input);
+        ProcessResult result = await Run("values", "--output", outputDirectory, input);
 
         Assert.AreEqual(1, result.ExitCode);
         Assert.IsEmpty(result.StandardError);
@@ -132,6 +133,7 @@ public sealed class ProcessContractTests
         Assert.AreEqual(
             "missing-cached-value",
             file.GetProperty("failure").GetProperty("kind").GetString());
+        Assert.AreEqual(JsonValueKind.Null, file.GetProperty("changes").ValueKind);
         Assert.IsFalse(
             Directory.Exists(outputDirectory) && Directory.EnumerateFileSystemEntries(outputDirectory).Any());
     }
@@ -147,6 +149,21 @@ public sealed class ProcessContractTests
         Assert.AreEqual(
             "usage",
             document.RootElement.GetProperty("error").GetProperty("kind").GetString());
+    }
+
+    [TestMethod]
+    public async Task FlatThreeXFormIsAUsageErrorNamingTheCommand()
+    {
+        ProcessResult result = await Run("--output", "out", "Book.xlsx");
+
+        Assert.AreEqual(2, result.ExitCode);
+        Assert.IsEmpty(result.StandardError);
+        using JsonDocument document = ParseSingleDocument(result);
+        JsonElement root = document.RootElement;
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("command").ValueKind);
+        StringAssert.Contains(
+            root.GetProperty("error").GetProperty("message").GetString(),
+            "xlclean values");
     }
 
     private static JsonDocument ParseSingleDocument(ProcessResult result)

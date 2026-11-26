@@ -14,7 +14,8 @@ public sealed class CliApplicationTests
         Invocation invocation = await Invoke(["--help"], UnexpectedConversion);
 
         Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, "Usage:");
+        StringAssert.Contains(invocation.StandardOutput, "Commands:");
+        StringAssert.Contains(invocation.StandardOutput, "  values  ");
         Assert.EndsWith("\n", invocation.StandardOutput);
         Assert.DoesNotContain("\r", invocation.StandardOutput);
         Assert.AreEqual(string.Empty, invocation.StandardError);
@@ -31,8 +32,27 @@ public sealed class CliApplicationTests
     }
 
     [TestMethod]
+    [DataRow(new string[] { "values", "--help" })]
+    [DataRow(new string[] { "values", "-h" })]
+    [DataRow(new string[] { "values", "--unknown", "--version", "--help" })]
+    public async Task CommandHelpDescribesTheCommand(string[] arguments)
+    {
+        Invocation invocation = await Invoke(arguments, UnexpectedConversion);
+        Invocation root = await Invoke(["--help"], UnexpectedConversion);
+
+        Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
+        StringAssert.Contains(invocation.StandardOutput, "xlclean values --output <directory>");
+        StringAssert.Contains(invocation.StandardOutput, "removedFormulas");
+        Assert.AreNotEqual(root.StandardOutput, invocation.StandardOutput);
+        Assert.EndsWith("\n", invocation.StandardOutput);
+        Assert.DoesNotContain("\r", invocation.StandardOutput);
+        Assert.AreEqual(string.Empty, invocation.StandardError);
+    }
+
+    [TestMethod]
     [DataRow(new string[] { "--version" })]
     [DataRow(new string[] { "--unknown", "--version" })]
+    [DataRow(new string[] { "values", "--version" })]
     public async Task VersionPrintsNameAndReleaseIdentityWithoutConverting(string[] arguments)
     {
         Invocation invocation = await Invoke(arguments, UnexpectedConversion);
@@ -46,11 +66,37 @@ public sealed class CliApplicationTests
     }
 
     [TestMethod]
+    public async Task CommandMustComeFirstForCommandHelp()
+    {
+        Invocation invocation = await Invoke(["--version", "values", "--help"], UnexpectedConversion);
+        Invocation root = await Invoke(["--help"], UnexpectedConversion);
+
+        Assert.AreEqual(root, invocation);
+    }
+
+    [TestMethod]
+    public async Task CommandNameAfterTerminatorIsAnInputPath()
+    {
+        FormulaRemovalRequest? capturedRequest = null;
+        Invocation invocation = await Invoke(
+            ["values", "--output", "out", "--", "values"],
+            (request, _, _) =>
+            {
+                capturedRequest = request;
+                return Task.FromResult(SuccessResult(request.InputPaths[0], "published.xlsx"));
+            });
+
+        Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
+        Assert.IsNotNull(capturedRequest);
+        Assert.AreEqual("values", capturedRequest.InputPaths.Single());
+    }
+
+    [TestMethod]
     public async Task HelpWinsOverVersion()
     {
         Invocation invocation = await Invoke(["--version", "-h"], UnexpectedConversion);
 
-        StringAssert.Contains(invocation.StandardOutput, "Usage:");
+        StringAssert.Contains(invocation.StandardOutput, "Commands:");
     }
 
     [TestMethod]
@@ -59,18 +105,19 @@ public sealed class CliApplicationTests
         Invocation invocation = await Invoke(["--unknown", "--help"], UnexpectedConversion);
 
         Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
-        StringAssert.Contains(invocation.StandardOutput, "Usage:");
+        StringAssert.Contains(invocation.StandardOutput, "Commands:");
         Assert.AreEqual(string.Empty, invocation.StandardError);
     }
 
     [TestMethod]
-    [DataRow(new string[] { "Book.xlsx" }, "--output")]
-    [DataRow(new string[] { "--output", "out" }, "input workbook")]
-    [DataRow(new string[] { "--wat" }, "Unknown option")]
-    [DataRow(new string[] { "--output", "out", "--start-row", "0", "Book.xlsx" }, "Start row")]
-    [DataRow(new string[] { "--output", "out", "--output", "other", "Book.xlsx" }, "more than once")]
-    [DataRow(new string[] { "--json", "--output", "out", "Book.xlsx" }, "Unknown option '--json'")]
-    [DataRow(new string[] { "--output", "bad\0directory", "Book.xlsx" }, "")]
+    [DataRow(new string[] { "values", "Book.xlsx" }, "--output")]
+    [DataRow(new string[] { "values", "--output", "out" }, "input workbook")]
+    [DataRow(new string[] { "values" }, "--output")]
+    [DataRow(new string[] { "values", "--wat" }, "Unknown option")]
+    [DataRow(new string[] { "values", "--output", "out", "--start-row", "0", "Book.xlsx" }, "Start row")]
+    [DataRow(new string[] { "values", "--output", "out", "--output", "other", "Book.xlsx" }, "more than once")]
+    [DataRow(new string[] { "values", "--json", "--output", "out", "Book.xlsx" }, "Unknown option '--json'")]
+    [DataRow(new string[] { "values", "--output", "bad\0directory", "Book.xlsx" }, "")]
     public async Task InvalidArgumentsReturnUsageError(string[] arguments, string expectedMessage)
     {
         Invocation invocation = await Invoke(arguments, UnexpectedConversion);
@@ -84,7 +131,34 @@ public sealed class CliApplicationTests
         JsonElement error = root.GetProperty("error");
         Assert.AreEqual("usage", error.GetProperty("kind").GetString());
         StringAssert.Contains(error.GetProperty("message").GetString(), expectedMessage);
-        StringAssert.Contains(error.GetProperty("help").GetString(), "--help");
+        Assert.AreEqual("Run xlclean values --help", error.GetProperty("help").GetString());
+        Assert.AreEqual("values", root.GetProperty("command").GetString());
+        Assert.AreEqual(string.Empty, invocation.StandardError);
+    }
+
+    [TestMethod]
+    [DataRow(new string[] { "--output", "out", "Book.xlsx" }, "A command is required before options; for example 'xlclean values --output ...'.")]
+    [DataRow(new string[] { "-o", "out", "Book.xlsx" }, "A command is required before options; for example 'xlclean values -o ...'.")]
+    [DataRow(new string[] { "convert", "--output", "out", "Book.xlsx" }, "Unknown command 'convert'.")]
+    [DataRow(new string[] { "Values", "--output", "out", "Book.xlsx" }, "Unknown command 'Values'.")]
+    [DataRow(new string[] { "Book.xlsx" }, "Unknown command 'Book.xlsx'.")]
+    [DataRow(new string[] { "--", "values" }, "A command is required; for example 'xlclean values --output <directory> <workbook>...'.")]
+    [DataRow(new string[] { "--output", "out", "values", "Book.xlsx" }, "A command is required before options; for example 'xlclean values --output ...'.")]
+    public async Task MissingOrUnknownCommandIsAUsageErrorWithoutCommand(
+        string[] arguments,
+        string expectedMessage)
+    {
+        Invocation invocation = await Invoke(arguments, UnexpectedConversion);
+
+        Assert.AreEqual(CliApplication.UsageErrorExitCode, invocation.ExitCode);
+        using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        JsonElement root = document.RootElement;
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("command").ValueKind);
+        Assert.AreEqual(0, root.GetProperty("files").GetArrayLength());
+        JsonElement error = root.GetProperty("error");
+        Assert.AreEqual("usage", error.GetProperty("kind").GetString());
+        Assert.AreEqual(expectedMessage, error.GetProperty("message").GetString());
+        Assert.AreEqual("Run xlclean --help", error.GetProperty("help").GetString());
         Assert.AreEqual(string.Empty, invocation.StandardError);
     }
 
@@ -102,6 +176,7 @@ public sealed class CliApplicationTests
 
         Invocation invocation = await Invoke(
             [
+                "values",
                 "--output=out",
                 "--start-row",
                 "42",
@@ -136,7 +211,7 @@ public sealed class CliApplicationTests
         };
 
         Invocation invocation = await Invoke(
-            ["--output", "out", "--", "-Book.xlsx"],
+            ["values", "--output", "out", "--", "-Book.xlsx"],
             converter);
 
         Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
@@ -155,7 +230,7 @@ public sealed class CliApplicationTests
         };
 
         Invocation invocation = await Invoke(
-            ["--output", "out", "--", "--help"],
+            ["values", "--output", "out", "--", "--help"],
             converter);
 
         Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
@@ -171,7 +246,7 @@ public sealed class CliApplicationTests
         FormulaRemovalRequest? capturedRequest = null;
 
         Invocation invocation = await Invoke(
-            ["--output", "out", "--start-row", value, "Book.xlsx"],
+            ["values", "--output", "out", "--start-row", value, "Book.xlsx"],
             (request, _, _) =>
             {
                 capturedRequest = request;
@@ -191,7 +266,7 @@ public sealed class CliApplicationTests
     public async Task RejectsNonCanonicalStartRows(string value)
     {
         Invocation invocation = await Invoke(
-            ["--output", "out", $"--start-row={value}", "Book.xlsx"],
+            ["values", "--output", "out", $"--start-row={value}", "Book.xlsx"],
             UnexpectedConversion);
 
         Assert.AreEqual(CliApplication.UsageErrorExitCode, invocation.ExitCode);
@@ -212,19 +287,18 @@ public sealed class CliApplicationTests
         ]);
 
         Invocation invocation = await Invoke(
-            ["--output", "out", "First.xlsx", "Second.xlsx"],
+            ["values", "--output", "out", "First.xlsx", "Second.xlsx"],
             (_, _, _) => Task.FromResult(result));
 
         Assert.AreEqual(CliApplication.ConversionFailureExitCode, invocation.ExitCode);
         Assert.AreEqual(
-            "{\"ok\":false,\"version\":\"" + CliApplication.Version + "\",\"files\":[" +
+            "{\"ok\":false,\"version\":\"" + CliApplication.Version + "\",\"command\":\"values\",\"files\":[" +
             "{\"input\":\"First.xlsx\",\"status\":\"converted\",\"output\":\"First_수식제거.xlsx\"," +
-            "\"failure\":null,\"removedFormulas\":3,\"removedTableFormulaDefinitions\":0," +
-            "\"processedSheets\":2,\"excludedSheets\":1,\"warnings\":[]}," +
+            "\"failure\":null,\"changes\":{\"removedFormulas\":3,\"removedTableFormulaDefinitions\":0," +
+            "\"processedSheets\":2,\"excludedSheets\":1},\"warnings\":[]}," +
             "{\"input\":\"Second.xlsx\",\"status\":\"failed\",\"output\":null," +
             "\"failure\":{\"kind\":\"missing-cached-value\",\"message\":\"No cache.\"}," +
-            "\"removedFormulas\":0,\"removedTableFormulaDefinitions\":0," +
-            "\"processedSheets\":0,\"excludedSheets\":0,\"warnings\":[]}]," +
+            "\"changes\":null,\"warnings\":[]}]," +
             "\"summary\":{\"total\":2,\"succeeded\":1,\"failed\":1,\"canceled\":false}," +
             "\"error\":null}\n",
             invocation.StandardOutput);
@@ -241,7 +315,7 @@ public sealed class CliApplicationTests
     public async Task FailureKindsUseStableIdentifiers(FormulaRemovalFailureKind kind, string expected)
     {
         Invocation invocation = await Invoke(
-            ["--output", "out", "Book.xlsx"],
+            ["values", "--output", "out", "Book.xlsx"],
             (_, _, _) => Task.FromResult(
                 new FormulaRemovalBatchResult([FailedFile("Book.xlsx", kind, "Failed.")])));
 
@@ -274,7 +348,7 @@ public sealed class CliApplicationTests
             ]);
 
             Invocation invocation = await Invoke(
-                ["--output", "out", "Book.xlsx"],
+                ["values", "--output", "out", "Book.xlsx"],
                 (_, _, _) => Task.FromResult(result));
 
             Assert.AreEqual(CliApplication.SuccessExitCode, invocation.ExitCode);
@@ -289,10 +363,12 @@ public sealed class CliApplicationTests
             Assert.AreEqual("out,\tBook.xlsx", file.GetProperty("output").GetString());
             Assert.AreEqual("converted", file.GetProperty("status").GetString());
             Assert.AreEqual(JsonValueKind.Null, file.GetProperty("failure").ValueKind);
-            Assert.AreEqual(1234, file.GetProperty("removedFormulas").GetInt32());
-            Assert.AreEqual(5, file.GetProperty("processedSheets").GetInt32());
-            Assert.AreEqual(6, file.GetProperty("excludedSheets").GetInt32());
-            Assert.AreEqual(7, file.GetProperty("removedTableFormulaDefinitions").GetInt32());
+            Assert.AreEqual("values", root.GetProperty("command").GetString());
+            JsonElement changes = file.GetProperty("changes");
+            Assert.AreEqual(1234, changes.GetProperty("removedFormulas").GetInt32());
+            Assert.AreEqual(5, changes.GetProperty("processedSheets").GetInt32());
+            Assert.AreEqual(6, changes.GetProperty("excludedSheets").GetInt32());
+            Assert.AreEqual(7, changes.GetProperty("removedTableFormulaDefinitions").GetInt32());
             Assert.AreEqual("line\r\n\u0001", file.GetProperty("warnings")[0].GetString());
         }
         finally
@@ -308,7 +384,7 @@ public sealed class CliApplicationTests
         cancellation.Cancel();
 
         Invocation invocation = await Invoke(
-            ["--output", "out", "Book.xlsx"],
+            ["values", "--output", "out", "Book.xlsx"],
             (_, _, token) => Task.FromCanceled<FormulaRemovalBatchResult>(token),
             cancellation.Token);
 
@@ -316,6 +392,7 @@ public sealed class CliApplicationTests
         using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
         JsonElement root = document.RootElement;
         Assert.IsFalse(root.GetProperty("ok").GetBoolean());
+        Assert.AreEqual("values", root.GetProperty("command").GetString());
         Assert.AreEqual(0, root.GetProperty("files").GetArrayLength());
         Assert.IsTrue(root.GetProperty("summary").GetProperty("canceled").GetBoolean());
         Assert.AreEqual(string.Empty, invocation.StandardError);
@@ -329,7 +406,7 @@ public sealed class CliApplicationTests
             [SuccessfulFile("First.xlsx", "First_수식제거.xlsx")]);
 
         Invocation invocation = await Invoke(
-            ["--output", "out", "First.xlsx", "Second.xlsx"],
+            ["values", "--output", "out", "First.xlsx", "Second.xlsx"],
             (_, _, token) =>
             {
                 cancellation.Cancel();
@@ -341,6 +418,7 @@ public sealed class CliApplicationTests
         using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
         JsonElement root = document.RootElement;
         Assert.IsFalse(root.GetProperty("ok").GetBoolean());
+        Assert.AreEqual("values", root.GetProperty("command").GetString());
         Assert.AreEqual("converted", root.GetProperty("files")[0].GetProperty("status").GetString());
         Assert.AreEqual(1, root.GetProperty("summary").GetProperty("succeeded").GetInt32());
         Assert.IsTrue(root.GetProperty("summary").GetProperty("canceled").GetBoolean());
@@ -351,11 +429,12 @@ public sealed class CliApplicationTests
     public async Task FatalConversionErrorIsReportedWithoutStackTrace()
     {
         Invocation invocation = await Invoke(
-            ["--output", "out", "Book.xlsx"],
+            ["values", "--output", "out", "Book.xlsx"],
             (_, _, _) => throw new IOException("Disk unavailable."));
 
         Assert.AreEqual(CliApplication.ConversionFailureExitCode, invocation.ExitCode);
         using JsonDocument document = ParseSingleDocument(invocation.StandardOutput);
+        Assert.AreEqual("values", document.RootElement.GetProperty("command").GetString());
         JsonElement error = document.RootElement.GetProperty("error");
         Assert.AreEqual("unexpected", error.GetProperty("kind").GetString());
         Assert.AreEqual("Disk unavailable.", error.GetProperty("message").GetString());

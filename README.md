@@ -238,13 +238,14 @@ excel-formula-remover `
 이때 `files`에는 취소 전에 끝난 파일만 들어 있습니다. Ctrl+C와 SIGTERM을 같은
 취소로 처리합니다.
 
-소스에서 CLI를 실행하려면 다음 명령을 사용합니다.
+소스에서 CLI를 실행하려면 다음 명령을 사용합니다. 소스 빌드는 4.0.0 형식이라
+`values` 명령이 필요합니다.
 
 ```powershell
 dotnet run `
   --project .\src\XlClean.Cli\XlClean.Cli.csproj `
   -- `
-  --output .\converted .\Book.xlsx
+  values --output .\converted .\Book.xlsx
 ```
 
 ## 에이전트 스킬
@@ -277,8 +278,10 @@ Copy-Item -Recurse .\skills\excel-formula-remover "$HOME\.agents\skills\"
 `main` 브랜치는 다음 릴리스(4.0.0)를 개발 중입니다. 이 릴리스에서 도구 이름이
 `xlclean`으로 바뀌고 스타일 정리 기능이 추가됩니다
 ([plans/style-cleanup.md](plans/style-cleanup.md)). 소스에서 빌드한 실행 파일과
-릴리스 산출물은 이미 `xlclean` 이름을 씁니다. 위의 설치·사용·스킬 안내는 게시된
-3.x 릴리스 기준이며 4.0.0 릴리스 때 바뀝니다.
+릴리스 산출물은 이미 `xlclean` 이름과 `xlclean values` 하위 명령을 쓰며, JSON
+결과에 `command`가 추가되고 파일별 개수는 `changes` 아래로 옮겨졌습니다. 정확한
+형식은 `xlclean --help`와 `xlclean values --help`가 기준입니다. 위의
+설치·사용·스킬 안내는 게시된 3.x 릴리스 기준이며 4.0.0 릴리스 때 바뀝니다.
 
 필수 도구는 `global.json`에 지정된 .NET SDK `10.0.110`, PowerShell 7, 그리고
 PATH에서 실행 가능한 `rumdl`입니다. 새 클론에서 전체 검증은 다음 한 명령으로

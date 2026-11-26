@@ -196,13 +196,15 @@ xlclean <command> --help
   running `styles` on a `values` output.
 - The JSON envelope gains a top-level `command`. Each file entry keeps `input`,
   `status`, `output`, `failure`, and `warnings`, and moves the
-  operation-specific counts into `changes`:
+  operation-specific counts into `changes`, which is `null` for a failed file
+  because nothing was published:
   - `values`: `removedFormulas`, `removedTableFormulaDefinitions`,
     `processedSheets`, `excludedSheets` (today's fields, moved).
   - `styles`: `cellStyles` and `cellFormats`, each
     `{ "before": n, "after": n }`, plus `mergedCellFormats`.
-- An unknown or missing command is a `usage` error with the same JSON shape.
-  Exit codes are unchanged.
+- An unknown or missing command is a `usage` error with the same JSON shape
+  and `command: null`; an option before any command (the 3.x form) gets a
+  message that names `xlclean values`. Exit codes are unchanged.
 
 ## Code shape
 
@@ -251,8 +253,9 @@ xlclean <command> --help
    describing the published 3.x release until step 8, so `main` never points
    at assets that do not exist. `npx skills add` installs the skill from
    `main`, so the skill directory moves to `skills/xlclean` only at step 8.
-2. **Subcommands** with `values` and the new JSON envelope. Update the skill
-   and its evals for the new commands and fields.
+2. **Subcommands** with `values` and the new JSON envelope. The skill and its
+   evals describe the released CLI, so they move to the new commands and
+   fields at step 8.
 3. **Shared pipeline extraction.** Existing tests pass unchanged in meaning.
 4. **Style model, planner, and verifier** for `.xlsx`/`.xlsm`.
 5. **`styles` for `.xlsx`/`.xlsm`**: named styles, then cell formats.

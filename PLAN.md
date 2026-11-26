@@ -41,7 +41,9 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Rename the source tree, executables, release assets, and installers to
   `xlclean` with no behavior change. The skill, installation docs, and
   repository keep the 3.x names until 4.0.0.
-- [ ] Split the CLI into `values` and `styles` subcommands.
+- [x] Move the CLI to subcommands: `xlclean values`, with `command` and a
+  per-file `changes` object in the JSON result. `styles` arrives with the
+  cleanup engine.
 - [ ] Extract the shared per-file safety pipeline from the formula engine.
 - [ ] Style cleanup for `.xlsx`/`.xlsm`, then `.xlsb`.
 - [ ] Release 4.0.0 and rename the repository to `cpaikr/xlclean`.
