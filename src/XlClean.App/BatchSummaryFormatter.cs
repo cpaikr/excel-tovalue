@@ -2,12 +2,13 @@ namespace XlClean.App;
 
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using XlClean.Core;
 
 /// <summary>
 /// Produces bounded, recovery-oriented Korean summaries for the native app.
 /// </summary>
-internal static class BatchSummaryFormatter
+internal static partial class BatchSummaryFormatter
 {
     internal const int DefaultDetailLimit = 8;
     private const int MaximumDetailLimit = 50;
@@ -23,7 +24,7 @@ internal static class BatchSummaryFormatter
     /// <param name="detailLimit">Maximum detail entries shown across all sections.</param>
     /// <returns>A concise Korean plain-text summary.</returns>
     internal static string Format(
-        FormulaRemovalBatchResult result,
+        DesktopBatchResult result,
         bool canceled,
         string outputDirectory,
         int detailLimit = DefaultDetailLimit)
@@ -76,7 +77,7 @@ internal static class BatchSummaryFormatter
 
     private static void AppendPublishedOutputs(
         StringBuilder summary,
-        FormulaRemovalBatchResult result,
+        DesktopBatchResult result,
         ref int remainingDetails)
     {
         if (result.SucceededCount == 0)
@@ -90,7 +91,7 @@ internal static class BatchSummaryFormatter
         summary.Append("저장된 파일");
 
         int shown = 0;
-        foreach (FormulaRemovalFileResult file in result.Files)
+        foreach (DesktopFileResult file in result.Files)
         {
             if (!file.Succeeded || remainingDetails == 0)
             {
@@ -100,6 +101,13 @@ internal static class BatchSummaryFormatter
             summary.Append('\n');
             summary.Append("• ");
             summary.Append(FormatOptionalPath(file.OutputPath));
+            if (file.Changes is { } changes)
+            {
+                summary.Append('\n');
+                summary.Append("  ");
+                summary.Append(FormatStyleChanges(changes));
+            }
+
             shown++;
             remainingDetails--;
         }
@@ -109,7 +117,7 @@ internal static class BatchSummaryFormatter
 
     private static void AppendFailures(
         StringBuilder summary,
-        FormulaRemovalBatchResult result,
+        DesktopBatchResult result,
         ref int remainingDetails)
     {
         if (result.FailedCount == 0)
@@ -121,7 +129,7 @@ internal static class BatchSummaryFormatter
         summary.Append("확인이 필요한 파일");
 
         int shown = 0;
-        foreach (FormulaRemovalFileResult file in result.Files)
+        foreach (DesktopFileResult file in result.Files)
         {
             if (file.Succeeded || remainingDetails == 0)
             {
@@ -151,13 +159,13 @@ internal static class BatchSummaryFormatter
 
     private static void AppendWarnings(
         StringBuilder summary,
-        FormulaRemovalBatchResult result,
+        DesktopBatchResult result,
         ref int remainingDetails)
     {
         long warningCount = 0;
-        foreach (FormulaRemovalFileResult file in result.Files)
+        foreach (DesktopFileResult file in result.Files)
         {
-            warningCount += file.Warnings?.Count ?? 0;
+            warningCount += file.Warnings.Count;
         }
 
         if (warningCount == 0)
@@ -169,13 +177,8 @@ internal static class BatchSummaryFormatter
         summary.Append("주의 사항");
 
         int shown = 0;
-        foreach (FormulaRemovalFileResult file in result.Files)
+        foreach (DesktopFileResult file in result.Files)
         {
-            if (file.Warnings is null)
-            {
-                continue;
-            }
-
             foreach (string warning in file.Warnings)
             {
                 if (remainingDetails == 0)
@@ -235,16 +238,54 @@ internal static class BatchSummaryFormatter
             _ => "아래 세부 정보를 확인한 뒤 다시 시도하세요.",
         };
 
+    private static string FormatStyleChanges(StyleCleanupChanges changes)
+    {
+        string text =
+            $"셀 스타일 {Invariant(changes.CellStylesBefore)} → {Invariant(changes.CellStylesAfter)}개 · " +
+            $"셀 서식 {Invariant(changes.CellFormatsBefore)} → {Invariant(changes.CellFormatsAfter)}개";
+        return changes.MergedCellFormats > 0
+            ? $"{text} · 같은 서식 {Invariant(changes.MergedCellFormats)}개 병합"
+            : text;
+    }
+
+    // The engines word warnings in English for the CLI. The app explains in Korean the ones it
+    // recognizes by the phrases StyleCleanupEngine publishes (and the formula engine's manual
+    // calculation wording), keeping the count the warning carries, and shows any other warning
+    // as is. Matching uses the raw text because FormatMessage truncates.
     private static string FormatWarning(string? warning)
     {
-        string formatted = FormatMessage(warning);
-        if (formatted.Contains("manual calculation", StringComparison.OrdinalIgnoreCase))
+        string raw = warning ?? string.Empty;
+        if (raw.Contains("manual calculation", StringComparison.OrdinalIgnoreCase))
         {
             return "통합 문서가 수동 계산 모드입니다. 저장된 값이 최신인지 Excel에서 확인하세요.";
         }
 
+        if (raw.Contains(StyleCleanupEngine.MacroStyleWarningPhrase, StringComparison.Ordinal))
+        {
+            return $"매크로가 있는 통합 문서에서 사용하지 않는 사용자 지정 셀 스타일{CountSuffix(raw, "를", "을")} 제거했습니다. " +
+                "스타일 이름으로 서식을 적용하는 매크로가 있다면 동작을 확인하세요.";
+        }
+
+        if (raw.Contains(StyleCleanupEngine.FormatLimitWarningPhrase, StringComparison.Ordinal))
+        {
+            return $"정리한 뒤에도 셀 서식과 스타일 서식{CountSuffix(raw, "가", "이")} Excel 한도 " +
+                $"{Invariant(StyleCleanupEngine.FormatRecordLimit)}개를 넘습니다. " +
+                "'셀 서식이 너무 많습니다' 오류가 계속될 수 있습니다.";
+        }
+
+        string formatted = FormatMessage(raw);
         return formatted.Length == 0 ? "추가 확인이 필요합니다." : formatted;
     }
+
+    // " 2000개를" from the warning's first number, or the noun's own particle ("을") without one.
+    private static string CountSuffix(string warning, string afterCount, string afterNoun)
+    {
+        Match number = FirstNumber().Match(warning);
+        return number.Success ? $" {number.Value}개{afterCount}" : afterNoun;
+    }
+
+    [GeneratedRegex("[0-9]+", RegexOptions.CultureInvariant)]
+    private static partial Regex FirstNumber();
 
     private static string FormatOptionalPath(string? path)
     {

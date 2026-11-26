@@ -3,46 +3,38 @@ namespace XlClean.App;
 using System.Diagnostics.CodeAnalysis;
 using XlClean.Core;
 
-internal delegate Task<FormulaRemovalBatchResult> DesktopFormulaRemovalConverter(
-    FormulaRemovalRequest request,
-    IProgress<WorkbookProgress>? progress,
-    CancellationToken cancellationToken);
-
 /// <summary>
-/// Owns the lifetime and cancellation state of one desktop conversion.
+/// Owns the lifetime and cancellation state of one desktop batch, whichever operation it runs.
 /// </summary>
-internal sealed class DesktopConversionController(
-    DesktopFormulaRemovalConverter converter) : IDisposable
+internal sealed class DesktopConversionController : IDisposable
 {
-    private readonly DesktopFormulaRemovalConverter converter =
-        converter ?? throw new ArgumentNullException(nameof(converter));
     private CancellationTokenSource? cancellation;
 
     /// <summary>
-    /// Gets a value indicating whether a conversion has not yet returned.
+    /// Gets a value indicating whether a batch has not yet returned.
     /// </summary>
     public bool IsRunning => cancellation is not null;
 
     /// <summary>
-    /// Gets a value indicating whether the active conversion was asked to stop.
+    /// Gets a value indicating whether the active batch was asked to stop.
     /// </summary>
     public bool IsCancellationRequested => cancellation?.IsCancellationRequested == true;
 
     /// <summary>
-    /// Runs one conversion and turns every engine terminal state into data for the form.
+    /// Runs one batch and turns every engine terminal state into data for the form.
     /// </summary>
     [SuppressMessage(
         "Design",
         "CA1031:Do not catch general exception types",
-        Justification = "The desktop event loop must render unexpected converter failures instead of terminating.")]
+        Justification = "The desktop event loop must render unexpected engine failures instead of terminating.")]
     public async Task<DesktopConversionOutcome> RunAsync(
-        FormulaRemovalRequest request,
+        DesktopBatchRunner runner,
         IProgress<WorkbookProgress>? progress = null)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(runner);
         if (cancellation is not null)
         {
-            throw new InvalidOperationException("A desktop conversion is already running.");
+            throw new InvalidOperationException("A desktop batch is already running.");
         }
 
         CancellationTokenSource currentCancellation = new();
@@ -50,19 +42,16 @@ internal sealed class DesktopConversionController(
 
         try
         {
-            FormulaRemovalBatchResult result = await converter(
-                request,
-                progress,
-                currentCancellation.Token);
+            DesktopBatchResult result = await runner(progress, currentCancellation.Token);
             return DesktopConversionOutcome.Completed(result);
         }
-        catch (FormulaRemovalCanceledException exception)
+        catch (DesktopBatchCanceledException exception)
         {
             return DesktopConversionOutcome.Canceled(exception.CompletedResult);
         }
         catch (OperationCanceledException) when (currentCancellation.IsCancellationRequested)
         {
-            return DesktopConversionOutcome.Canceled(new FormulaRemovalBatchResult([]));
+            return DesktopConversionOutcome.Canceled(DesktopBatchResult.Empty);
         }
         catch (Exception exception)
         {
@@ -107,19 +96,19 @@ internal sealed class DesktopConversionController(
 }
 
 /// <summary>
-/// Describes how one desktop conversion stopped.
+/// Describes how one desktop batch stopped.
 /// </summary>
 internal sealed record DesktopConversionOutcome(
-    FormulaRemovalBatchResult Result,
+    DesktopBatchResult Result,
     bool WasCanceled,
     Exception? Failure)
 {
-    public static DesktopConversionOutcome Completed(FormulaRemovalBatchResult result) =>
+    public static DesktopConversionOutcome Completed(DesktopBatchResult result) =>
         new(result, WasCanceled: false, Failure: null);
 
-    public static DesktopConversionOutcome Canceled(FormulaRemovalBatchResult result) =>
+    public static DesktopConversionOutcome Canceled(DesktopBatchResult result) =>
         new(result, WasCanceled: true, Failure: null);
 
     public static DesktopConversionOutcome Failed(Exception exception) =>
-        new(new FormulaRemovalBatchResult([]), WasCanceled: false, exception);
+        new(DesktopBatchResult.Empty, WasCanceled: false, exception);
 }
