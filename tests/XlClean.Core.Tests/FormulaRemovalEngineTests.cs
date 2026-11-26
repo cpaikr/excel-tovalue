@@ -91,7 +91,7 @@ public sealed class FormulaRemovalEngineTests
 
         FormulaRemovalFileResult result = batch.Files.Single();
         Assert.IsFalse(result.Succeeded);
-        Assert.AreEqual(FormulaRemovalFailureKind.MissingCachedValue, result.FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.MissingCachedValue, result.FailureKind);
         StringAssert.Contains(result.ErrorMessage, "Data");
         StringAssert.Contains(result.ErrorMessage, "A1");
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
@@ -191,9 +191,9 @@ public sealed class FormulaRemovalEngineTests
             false,
             new SheetSpec("Data", new CellSpec("A1", "1+1", "2")));
 
-        InlineProgress<FormulaRemovalProgress> progress = new(value =>
+        InlineProgress<WorkbookProgress> progress = new(value =>
         {
-            if (!createdCompetingFile && value.Stage == FormulaRemovalStage.ProcessingWorksheet)
+            if (!createdCompetingFile && value.Stage == WorkbookStage.ProcessingWorksheet)
             {
                 File.WriteAllBytes(competingPath, competingBytes);
                 createdCompetingFile = true;
@@ -352,7 +352,7 @@ public sealed class FormulaRemovalEngineTests
 
         FormulaRemovalFileResult result = batch.Files.Single();
         Assert.AreEqual(
-            FormulaRemovalFailureKind.FormulaRangeCrossesBoundary,
+            WorkbookFailureKind.FormulaRangeCrossesBoundary,
             result.FailureKind);
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
@@ -377,7 +377,7 @@ public sealed class FormulaRemovalEngineTests
 
         FormulaRemovalFileResult result = batch.Files.Single();
         Assert.AreEqual(
-            FormulaRemovalFailureKind.FormulaRangeCrossesBoundary,
+            WorkbookFailureKind.FormulaRangeCrossesBoundary,
             result.FailureKind);
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
@@ -499,7 +499,7 @@ public sealed class FormulaRemovalEngineTests
         FormulaRemovalFileResult result = batch.Files.Single();
         Assert.IsFalse(result.Succeeded);
         Assert.AreEqual(
-            FormulaRemovalFailureKind.FormulaRangeCrossesBoundary,
+            WorkbookFailureKind.FormulaRangeCrossesBoundary,
             result.FailureKind);
         Assert.IsFalse(Directory.EnumerateFiles(outputDirectory).Any());
     }
@@ -571,7 +571,7 @@ public sealed class FormulaRemovalEngineTests
         FormulaRemovalBatchResult batch = await FormulaRemovalEngine.ConvertAsync(
             new FormulaRemovalRequest([inputPath], Path.Combine(testDirectory, "output")));
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, batch.Files.Single().FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, batch.Files.Single().FailureKind);
     }
 
     [TestMethod]
@@ -582,7 +582,7 @@ public sealed class FormulaRemovalEngineTests
         FormulaRemovalBatchResult batch = await FormulaRemovalEngine.ConvertAsync(
             new FormulaRemovalRequest([inputPath], Path.Combine(testDirectory, "output")));
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidInput, batch.Files.Single().FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.InvalidInput, batch.Files.Single().FailureKind);
     }
 
     [TestMethod]
@@ -604,7 +604,7 @@ public sealed class FormulaRemovalEngineTests
         FormulaRemovalBatchResult batch = await FormulaRemovalEngine.ConvertAsync(
             new FormulaRemovalRequest([inputPath], Path.Combine(testDirectory, "output")));
 
-        Assert.AreEqual(FormulaRemovalFailureKind.InvalidWorkbook, batch.Files.Single().FailureKind);
+        Assert.AreEqual(WorkbookFailureKind.InvalidWorkbook, batch.Files.Single().FailureKind);
     }
 
     [TestMethod]
@@ -619,7 +619,7 @@ public sealed class FormulaRemovalEngineTests
     {
         string inputPath = Path.Combine(testDirectory, "Relative.xlsx");
         string requestedPath = Path.GetRelativePath(Directory.GetCurrentDirectory(), inputPath);
-        List<FormulaRemovalProgress> reports = [];
+        List<WorkbookProgress> reports = [];
         CreateWorkbook(
             inputPath,
             false,
@@ -629,7 +629,7 @@ public sealed class FormulaRemovalEngineTests
             new FormulaRemovalRequest(
                 [requestedPath],
                 Path.Combine(testDirectory, "output")),
-            new InlineProgress<FormulaRemovalProgress>(reports.Add));
+            new InlineProgress<WorkbookProgress>(reports.Add));
 
         FormulaRemovalFileResult result = batch.Files.Single();
         Assert.IsTrue(result.Succeeded, result.ErrorMessage);
@@ -678,9 +678,9 @@ public sealed class FormulaRemovalEngineTests
         byte[] sourceBefore = File.ReadAllBytes(inputPath);
         using CancellationTokenSource cancellation = new();
         string? reportedInputPath = null;
-        InlineProgress<FormulaRemovalProgress> progress = new(update =>
+        InlineProgress<WorkbookProgress> progress = new(update =>
         {
-            if (update.Stage == FormulaRemovalStage.ProcessingWorksheet)
+            if (update.Stage == WorkbookStage.ProcessingWorksheet)
             {
                 reportedInputPath = update.InputPath;
                 cancellation.Cancel();
@@ -721,10 +721,10 @@ public sealed class FormulaRemovalEngineTests
             false,
             new SheetSpec("Data", new CellSpec("A1", "2+2", "4")));
         using CancellationTokenSource cancellation = new();
-        InlineProgress<FormulaRemovalProgress> progress = new(value =>
+        InlineProgress<WorkbookProgress> progress = new(value =>
         {
             if (value.InputPath == secondInput &&
-                value.Stage == FormulaRemovalStage.ProcessingWorksheet)
+                value.Stage == WorkbookStage.ProcessingWorksheet)
             {
                 cancellation.Cancel();
             }

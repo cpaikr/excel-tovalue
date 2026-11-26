@@ -504,7 +504,7 @@ internal sealed class MainForm : Form
         DesktopConversionOutcome outcome;
         try
         {
-            Progress<FormulaRemovalProgress> progress = new(UpdateProgress);
+            Progress<WorkbookProgress> progress = new(UpdateProgress);
             outcome = await conversionController.RunAsync(request, progress);
         }
         finally
@@ -709,7 +709,7 @@ internal sealed class MainForm : Form
             !string.IsNullOrWhiteSpace(outputDirectoryTextBox.Text);
     }
 
-    private void UpdateProgress(FormulaRemovalProgress progress)
+    private void UpdateProgress(WorkbookProgress progress)
     {
         progressBar.Maximum = Math.Max(1, progress.TotalFiles);
         progressBar.Value = Math.Clamp(progress.CompletedFiles, 0, progressBar.Maximum);
@@ -717,13 +717,13 @@ internal sealed class MainForm : Form
         string fileName = Path.GetFileName(progress.InputPath);
         switch (progress.Stage)
         {
-            case FormulaRemovalStage.StartingFile:
+            case WorkbookStage.StartingFile:
                 SetStatus($"변환 중 · {progress.CompletedFiles + 1:N0}/{progress.TotalFiles:N0} · {fileName}");
                 break;
-            case FormulaRemovalStage.ProcessingWorksheet:
+            case WorkbookStage.ProcessingWorksheet:
                 SetStatus($"변환 중 · {progress.CompletedFiles + 1:N0}/{progress.TotalFiles:N0} · {fileName} · {progress.WorksheetName}");
                 break;
-            case FormulaRemovalStage.CompletedFile:
+            case WorkbookStage.CompletedFile:
                 SetStatus($"{progress.CompletedFiles:N0}/{progress.TotalFiles:N0}개 파일 처리 완료");
                 break;
         }

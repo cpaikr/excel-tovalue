@@ -215,20 +215,20 @@ internal static class BatchSummaryFormatter
         summary.Append('개');
     }
 
-    private static string GetRecoveryGuidance(FormulaRemovalFailureKind failureKind) =>
+    private static string GetRecoveryGuidance(WorkbookFailureKind failureKind) =>
         failureKind switch
         {
-            FormulaRemovalFailureKind.InvalidInput =>
+            WorkbookFailureKind.InvalidInput =>
                 "파일 경로와 .xlsx/.xlsm/.xlsb 확장자를 확인한 뒤 다시 추가하세요.",
-            FormulaRemovalFailureKind.MissingCachedValue =>
+            WorkbookFailureKind.MissingCachedValue =>
                 "Excel에서 수식을 다시 계산하고 저장한 뒤 다시 시도하세요.",
-            FormulaRemovalFailureKind.FormulaRangeCrossesBoundary =>
+            WorkbookFailureKind.FormulaRangeCrossesBoundary =>
                 "시작 행을 1로 바꾸거나 수식 범위가 끝난 뒤의 행으로 조정하세요.",
-            FormulaRemovalFailureKind.InvalidWorkbook =>
+            WorkbookFailureKind.InvalidWorkbook =>
                 "파일이 Excel에서 정상적으로 열리는지 확인하고 다시 저장한 뒤 시도하세요.",
-            FormulaRemovalFailureKind.FileAccess =>
+            WorkbookFailureKind.FileAccess =>
                 "파일이 열려 있지 않은지와 파일·출력 폴더의 읽기/쓰기 권한을 확인하세요.",
-            FormulaRemovalFailureKind.Unexpected =>
+            WorkbookFailureKind.Unexpected =>
                 "다시 시도하고, 문제가 계속되면 아래 세부 정보를 기록해 주세요.",
             _ => "아래 세부 정보를 확인한 뒤 다시 시도하세요.",
         };

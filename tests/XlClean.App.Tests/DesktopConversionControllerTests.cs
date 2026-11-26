@@ -135,7 +135,7 @@ public sealed class DesktopConversionControllerTests
         new(
             inputPath,
             outputPath,
-            FormulaRemovalFailureKind.None,
+            WorkbookFailureKind.None,
             null,
             1,
             1,

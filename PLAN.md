@@ -44,7 +44,8 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Move the CLI to subcommands: `xlclean values`, with `command` and a
   per-file `changes` object in the JSON result. `styles` arrives with the
   cleanup engine.
-- [ ] Extract the shared per-file safety pipeline from the formula engine.
+- [x] Extract the shared per-file safety pipeline (`WorkbookBatchPipeline`) from
+  the formula engine; failure kinds and progress are now `Workbook*` types.
 - [ ] Style cleanup for `.xlsx`/`.xlsm`, then `.xlsb`.
 - [ ] Release 4.0.0 and rename the repository to `cpaikr/xlclean`.
 - [ ] Style cleanup in the GUI (4.1.0).
@@ -98,7 +99,8 @@ files, without modifying source workbooks or overwriting earlier outputs.
 
 - Pinned .NET SDK `10.0.110` locked restore and Release build: clean, zero
   warnings.
-- Automated tests: 93 passed across Core, CLI, and App projects.
+- Automated tests (2026-11-26, `main` toward 4.0.0): 137 passed across Core,
+  CLI, and App projects, including pipeline tests with a non-formula operation.
 - Excel desktop round trip (2026-11-05): `.xlsb` and `.xlsx` outputs of
   Excel-saved workbooks with every formula result type, array, dynamic-array,
   data-table, and table calculated/totals formulas reopened in Excel with
