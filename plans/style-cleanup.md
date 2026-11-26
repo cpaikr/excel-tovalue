@@ -1,8 +1,7 @@
 # xlclean: rename and style cleanup
 
-Status: steps 1 to 7 done on 2026-11-26, and step 8's documentation (README,
-skill, evals) is prepared; the repository rename, tag, and install
-verification of step 8, and the GUI (step 9), remain.
+Status: steps 1 to 8 done on 2026-11-26; 4.0.0 is released. The GUI (step 9,
+4.1.0) remains.
 [PLAN.md](../PLAN.md) owns current state; this document owns the design and
 order of the work.
 
