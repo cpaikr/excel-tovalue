@@ -69,7 +69,7 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Style cleanup in the GUI: an operation selector runs `values` or
   `styles` through the same engines; style mode hides the scope settings and
   the summary shows each file's style and format counts.
-- [ ] Release 4.1.0 with the GUI change.
+- [x] Release 4.1.0 with the GUI change (2026-11-27).
 
 ## Product constraints
 
@@ -194,6 +194,12 @@ files, without modifying source workbooks or overwriting earlier outputs.
   both modes, and its own request path cleaned the Excel-saved `.xlsb` fixture
   with the real engine (8 to 3 cell styles), the source unchanged. Not
   exercised: clicking through the native dialogs.
+- `xlclean` 4.1.0 (released 2026-11-27): the release workflow passed every
+  job, and the release is the latest. All three archives matched
+  `SHA256SUMS.txt`; the GUI archive holds `XlClean.exe`, `LICENSE.md`, and
+  `THIRD-PARTY-NOTICES.txt`. The released `XlClean.exe` reports
+  `4.1.0+226c4d8` and opened the new window ("xlclean - Excel 정리 도구").
+  The CLI install was not repeated; the CLI is unchanged since 4.0.1.
 - Not covered by a test: the notices content. The installers check only the
   CLI archive entry names.
 - Not covered by a test: SIGTERM cancellation.
