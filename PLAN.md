@@ -65,7 +65,7 @@ files, without modifying source workbooks or overwriting earlier outputs.
 - [x] Fix: an empty cached value (`<v></v>`, as openpyxl writes for formulas
   it never calculated) is a missing value unless the result is text. Before
   the fix, released 3.x and 4.0.0 silently blanked such cells.
-- [ ] Release 4.0.1 with that fix.
+- [x] Release 4.0.1 with that fix (2026-11-27).
 - [ ] Style cleanup in the GUI (4.1.0).
 
 ## Product constraints
@@ -177,6 +177,13 @@ files, without modifying source workbooks or overwriting earlier outputs.
   installed it under WSL Ubuntu 24.04. The old repository URL redirects to the
   new one. Not exercised: the default install folders and `PATH`
   registration, and `verify-windows-install.ps1` from an independent process.
+- `xlclean` 4.0.1 (released 2026-11-27): the release workflow passed every
+  job, and the release is the latest. All three archives matched
+  `SHA256SUMS.txt`. Installed from the release archive into a scratch folder,
+  `xlclean values` failed an openpyxl workbook with an uncalculated formula
+  with `missing-cached-value` and published nothing. The README's Linux
+  commands installed `xlclean 4.0.1` under WSL Ubuntu 24.04. The README's
+  Windows download commands were not rerun.
 - Not covered by a test: the notices content. The installers check only the
   CLI archive entry names.
 - Not covered by a test: SIGTERM cancellation.
