@@ -1,7 +1,8 @@
 # xlclean: rename and style cleanup
 
-Status: steps 1 to 8 done on 2026-11-26 (4.0.0 released); step 9, the GUI,
-done on 2026-11-27 and awaiting the 4.1.0 release.
+Status: complete. Steps 1 to 8 shipped in 4.0.0 (2026-11-26) and step 9,
+the GUI, in 4.1.0 (2026-11-27). Real bloated workbooks remain untested (see
+Open questions).
 [PLAN.md](../PLAN.md) owns current state; this document owns the design and
 order of the work.
 
